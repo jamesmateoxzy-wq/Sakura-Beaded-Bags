@@ -4,9 +4,9 @@ A college web-development project for Sakura Beaded Bags, built with **HTML, CSS
 
 ## Project status
 
-**Planning / beginning software development.** The team has completed UI/UX design and wireframes, prepared the database, and is revising the ERD. Application coding has not started yet.
+**Planning / beginning software development.** The team has completed UI/UX design and wireframes, prepared the database. Application coding has not started yet.
 
-**Current project scope:** An **internal business management system**. The previous Scrum Master confirmed that **a customer-facing shopping website is not required**. The team will focus on the administration and business workflow; any later scope change should be confirmed with the professor or Product Owner.
+**Current project scope:** An **internal business management system**. The team will focus on the administration and business workflow; any later scope change should be confirmed with the professor or Product Owner.
 
 ### Admin modules shown in the current designs
 - Dashboard
@@ -35,21 +35,11 @@ database/        SQL schema and database setup documentation
 docs/            Requirements, planning, and team workflow notes
 ```
 
-## Getting started
-
-1. Clone the repository: `git clone https://github.com/jamesmateoxzy-wq/Sakura-Beaded-Bags.git`
-2. Install a local PHP and MySQL environment, such as XAMPP.
-3. Read [the project overview](docs/PROJECT_OVERVIEW.md), [team workflow](docs/TEAM_WORKFLOW.md), and [database notes](database/README.md).
-4. Agree on the exact features, ERD, database schema, and first sprint before starting development.
-5. Work on separate feature branches and open pull requests rather than pushing unfinished work directly to `main`.
-
-> **Important:** This repository is a starter structure only. There is no working application or committed database schema yet. Never commit passwords, real customer data, or local secrets.
-
 ## Team
-- James — Scrum Master; previously responsible for the database
-- Gab — Previous Scrum Master; documentation
-- Rags — UI/UX design
-- Tribs — ERD revision
-- Diz — Wireframe
-
-Development task ownership and the Product Owner are still to be confirmed by the team.
+SCRUM MASTER
+- Mateo, James 
+Team Members
+- Dizon, Nestor
+- Ragos, Michelle
+- Sy, John Gabriel
+- Tribo, Maika
