@@ -1,10 +1,10 @@
-# Open Decisions
+# Project Decisions
 
-Use this page to capture team decisions and avoid contradictory implementation.
+Use this page to capture confirmed scope decisions and questions that remain open.
 
 | Question | Status | Decision/owner |
 | --- | --- | --- |
-| Do we need a customer-facing shopping website? | Open | Confirm with professor / Product Owner |
+| Do we need a customer-facing shopping website? | **Decided: No** | Confirmed with previous Scrum Master on November 7, 2026; internal/admin management only. Revisit if professor/Product Owner changes requirements. |
 | Who is the Product Owner? | Open | Confirm with team / professor |
 | What is the development deadline? | Open | Await announcement |
 | What order statuses are valid? | Open | Agree before implementing order workflow |

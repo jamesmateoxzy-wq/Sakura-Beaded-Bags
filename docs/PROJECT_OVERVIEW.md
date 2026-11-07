@@ -1,7 +1,10 @@
 # Sakura Beaded Bags — Project Overview
 
 ## Purpose
-Develop a web-based system that helps Sakura Beaded Bags manage its business activities.
+Develop an **internal web-based business management system** for Sakura Beaded Bags, helping the staff manage daily operations.
+
+## Scope confirmation
+On November 7, 2026, the current Scrum Master confirmed with the previous Scrum Master that **no customer-facing shopping website is required**. Current development scope is therefore admin/business management only. If the professor or Product Owner later specifies otherwise, update this decision and backlog before expanding the scope.
 
 ## Confirmed technical stack
 HTML, CSS, JavaScript, PHP, MySQL.
@@ -27,8 +30,8 @@ These are based on the design review, not a final approved requirements list.
 
 ## Decisions the team must confirm
 - [ ] Confirm the Product Owner / who approves and prioritizes requirements
-- [ ] Confirm if a customer-facing shopping website is required
-- [ ] Confirm required features, validations, and user roles
+- [x] Customer-facing website excluded (confirmed with previous Scrum Master, November 7, 2026)
+- [ ] Confirm required admin features, validations, and user roles
 - [ ] Reconcile the ERD and MySQL database structure
 - [ ] Define order status, payment status, stock adjustment, and costing rules
 - [ ] Confirm the development deadline and sprint length

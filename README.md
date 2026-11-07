@@ -6,7 +6,7 @@ A college web-development project for Sakura Beaded Bags, built with **HTML, CSS
 
 **Planning / beginning software development.** The team has completed UI/UX design and wireframes, prepared the database, and is revising the ERD. Application coding has not started yet.
 
-The current UI designs focus on an **admin/business management system**. Whether a customer-facing storefront is required is **not yet confirmed**; the `customer/` directory is reserved for that possibility and is not a commitment to build it.
+**Current project scope:** An **internal business management system**. The previous Scrum Master confirmed that **a customer-facing shopping website is not required**. The team will focus on the administration and business workflow; any later scope change should be confirmed with the professor or Product Owner.
 
 ### Admin modules shown in the current designs
 - Dashboard
@@ -26,7 +26,6 @@ The current UI designs focus on an **admin/business management system**. Whether
 
 ```text
 admin/           Admin interface and related PHP pages (to be implemented)
-customer/        Reserved for a storefront if requirements confirm it
 assets/
   css/           Shared stylesheets
   js/            Shared JavaScript
@@ -44,7 +43,7 @@ docs/            Requirements, planning, and team workflow notes
 4. Agree on the exact features, ERD, database schema, and first sprint before starting development.
 5. Work on separate feature branches and open pull requests rather than pushing unfinished work directly to `main`.
 
-> **Important:** This repository is a starter structure only. There is no working website or committed database schema yet. Never commit passwords, real customer data, or local secrets.
+> **Important:** This repository is a starter structure only. There is no working application or committed database schema yet. Never commit passwords, real customer data, or local secrets.
 
 ## Team
 - James — Scrum Master; previously responsible for the database
