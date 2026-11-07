@@ -37,7 +37,8 @@ docs/            Requirements, planning, and team workflow notes
 
 ## Team
 SCRUM MASTER
-- Mateo, James 
+- Mateo, James
+
 Team Members
 - Dizon, Nestor
 - Ragos, Michelle
