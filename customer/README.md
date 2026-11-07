@@ -1,4 +1,4 @@
-# Customer Website — Scope Not Yet Confirmed
+# Customer Website - Scope Not Yet Confirmed
 
 This directory is a placeholder only. The team is **not yet certain** whether a customer-facing shopping website is required.
 
