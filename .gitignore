@@ -1,0 +1,33 @@
+# Secrets and machine-specific configuration
+.env
+.env.*
+!.env.example
+**/config.local.php
+**/db.local.php
+**/database.local.php
+*.pem
+*.key
+
+# PHP / Composer
+/vendor/
+/.phpunit.cache/
+/.phpunit.result.cache
+
+# IDE and OS files
+/.idea/
+/.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs and temporary files
+*.log
+*.tmp
+/cache/
+/tmp/
+
+# Local database backups and user-uploaded files
+*.sql.gz
+*.bak
+/uploads/*
+!/uploads/.gitkeep
