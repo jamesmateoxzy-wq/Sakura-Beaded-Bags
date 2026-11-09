@@ -1,0 +1,50 @@
+/* Dashboard only */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.dash-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.month-picker { display: flex; align-items: center; gap: 8px; background: var(--white); border: 1px solid var(--line); border-radius: 10px; padding: 7px 12px; }
+.month-picker input { border: 0; background: none; font-weight: 500; font-size: 13px; cursor: pointer; }
+.month-picker input:focus { outline: none; }
+
+/* stat cards */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
+.stat { padding: 16px 18px; }
+.stat-top { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+.stat-top .icon { color: var(--pink-500); }
+.stat strong { display: block; font-size: 28px; font-weight: 600; margin: 4px 0 2px; line-height: 1.2; }
+.stat small { color: var(--muted); font-size: 11.5px; }
+
+/* main grid */
+.dash-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+.area-orders, .area-chart { min-width: 0; }
+.card-head .btn-sm .icon { width: 14px; height: 14px; }
+
+/* inventory alerts */
+.alert-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.alert-list li { display: flex; justify-content: space-between; align-items: center; background: var(--pink-50); border-radius: 12px; padding: 10px 14px; }
+.alert-list strong { display: block; font-size: 13px; font-weight: 600; }
+.alert-list small { color: var(--pink-600); font-size: 11.5px; }
+.low-tag { color: var(--pink-600); font-size: 12px; }
+.link-pink { color: var(--pink-600); font-size: 12.5px; }
+.link-pink:hover { text-decoration: underline; }
+
+/* sales chart */
+.chart-total { color: var(--pink-600); font-size: 13px; font-weight: 600; }
+.chart { display: flex; gap: 12px; height: 190px; }
+.chart-axis { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 24px; color: var(--muted); font-size: 11px; }
+.chart-bars { flex: 1; display: flex; align-items: flex-end; justify-content: space-around; gap: 14px; border-bottom: 1px solid var(--line); }
+.bar-col { flex: 1; max-width: 64px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: stretch; gap: 8px; }
+.bar-col span { text-align: center; color: var(--muted); font-size: 11.5px; height: 16px; transform: translateY(24px); }
+.bar { height: var(--h); background: var(--pink-200); border-radius: 6px 6px 0 0; margin-bottom: 0; transform-origin: bottom; }
+.bar.is-current { background: var(--pink-500); }
+.bar:hover { filter: brightness(.95); }
+.bar.grow { animation: grow .7s ease-out both; }
+@keyframes grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* quick actions */
+.area-quick { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.area-quick .card-head { margin-bottom: 0; }
+.quick-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 1180px) { .stats { grid-template-columns: repeat(2, 1fr); } .dash-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px)  { .stats { grid-template-columns: 1fr; } }
