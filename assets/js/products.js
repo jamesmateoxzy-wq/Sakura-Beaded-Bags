@@ -103,7 +103,7 @@
       return (!q || p.name.toLowerCase().indexOf(q) > -1) && (cat === 'all' || p.category === cat);
     });
     var list = $('productList');
-    list.innerHTML = items.length ? '' : '<p class="empty">No products match your search.</p>';
+    list.innerHTML = items.length ? '' : '<p class="empty">' + (products.length ? 'No products match your search.' : 'No products yet.') + '</p>';
     items.forEach(function (p) {
       var selected = p.id === selectedId;
       var btn = document.createElement('button');
@@ -122,6 +122,8 @@
   function selectProduct(id) {
     selectedId = id;
     draft = clone(findProduct(id));
+    $('costSheet').hidden = false;
+    $('emptyState').hidden = true;
     renderList();
     renderSheet();
   }
@@ -211,6 +213,7 @@
     $('amMaterial').innerHTML = inventory.map(function (m) {
       return '<option>' + esc(m.name) + ' · ' + m.stock + ' ' + esc(m.unit) + ' available</option>';
     }).join('');
+    if (!inventory.length) { $('amMaterial').innerHTML = '<option>No materials in inventory yet</option>'; }
     $('amQty').value = 1;
     $('amCost').value = inventory.length ? inventory[0].cost : 0;
     updateAmount();
@@ -221,6 +224,7 @@
   $('amQty').addEventListener('input', updateAmount);
   $('amCost').addEventListener('input', updateAmount);
   $('amAdd').addEventListener('click', function () {
+    if (!inv()) { S.toast('Add materials in Inventory Management first.'); return; }
     var qty = num($('amQty').value);
     if (qty <= 0) { $('amQty').classList.add('is-error'); S.toast('Enter a quantity greater than 0.'); return; }
     $('amQty').classList.remove('is-error');
@@ -305,5 +309,11 @@
   });
 
   // ---------- start ----------
-  if (selectedId !== null) selectProduct(selectedId); else renderList();
+  if (selectedId !== null) {
+    selectProduct(selectedId);
+  } else {
+    $('costSheet').hidden = true;
+    $('emptyState').hidden = false;
+    renderList();
+  }
 })();

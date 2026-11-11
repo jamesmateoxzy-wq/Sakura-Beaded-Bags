@@ -17,3 +17,4 @@ const ALLOWED_ADMIN_EMAILS = [
 ];
 
 const DEMO_MODE = true;
+const USE_SAMPLE_DATA = false;

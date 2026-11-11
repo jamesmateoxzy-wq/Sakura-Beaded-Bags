@@ -2,9 +2,12 @@
 /**
  * PRODUCT COSTING & PRICING  (frontend)
  * ------------------------------------------------------------
- * The three arrays below are SAMPLE DATA copied from the Figma prototype.
- * Backend teammate: replace them with MySQL queries that return the SAME
- * keys. The page prints them as JSON and assets/js/products.js does the rest.
+ * USE_SAMPLE_DATA (includes/config.php):
+ *   false -> what a brand-new database shows (no products, no materials)
+ *   true  -> the Figma sample products
+ * Backend teammate: replace the two lines that set $materials and $products
+ * with MySQL queries that return the SAME keys as the sample arrays.
+ * The page prints them as JSON and assets/js/products.js does the rest.
  *
  *   $categories -> product collections
  *   $materials  -> the inventory list (used by the "Add material" pop-up)
@@ -13,10 +16,11 @@
  * Saving is done with fetch() in products.js (see the TODO (backend) notes).
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/config.php';
 
 $categories = ['Signature collection', 'Pink collection', 'Pearl collection'];
 
-$materials = [
+$sampleMaterials = [
     ['id' => 'MAT-001', 'name' => 'Pink Beads',         'unit' => 'pcs',  'cost' => 2.00,  'stock' => 10],
     ['id' => 'MAT-002', 'name' => 'Nylon Thread',       'unit' => 'roll', 'cost' => 40.00, 'stock' => 3],
     ['id' => 'MAT-003', 'name' => 'Bag Handles',        'unit' => 'pcs',  'cost' => 55.00, 'stock' => 5],
@@ -26,7 +30,7 @@ $materials = [
     ['id' => 'MAT-007', 'name' => 'Pink Ribbon',        'unit' => 'roll', 'cost' => 25.00, 'stock' => 2],
 ];
 
-$products = [
+$sampleProducts = [
     [
         'id' => 1, 'sku' => 'SAK-HRT-001', 'name' => 'Heart Bag', 'category' => 'Signature collection',
         'image' => 'heart-bag.jpg',
@@ -59,6 +63,10 @@ $products = [
     ],
 ];
 
+// TODO (backend): replace these two lines with database queries
+$materials = USE_SAMPLE_DATA ? $sampleMaterials : [];
+$products  = USE_SAMPLE_DATA ? $sampleProducts  : [];
+
 $pageTitle    = 'Product Costing & Pricing';
 $pageSubtitle = 'Thoughtful pricing for every handcrafted piece.';
 $activePage   = 'products';
@@ -84,6 +92,11 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="prod-toolbar">
       <select class="select" id="categoryFilter" aria-label="Filter by category"></select>
       <button type="button" class="btn btn-primary" id="openAddProduct"><?= icon('plus') ?> Add Product</button>
+    </div>
+
+    <div class="card" id="emptyState" hidden style="text-align:center;padding:40px 24px">
+      <h2>No products yet</h2>
+      <p class="card-sub">Click “Add Product” to create your first costing sheet. Materials come from Inventory Management, so add your materials there first.</p>
     </div>
 
     <div class="card" id="costSheet">
@@ -267,3 +280,4 @@ require_once __DIR__ . '/../includes/header.php';
 </script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
+
