@@ -35,6 +35,7 @@ window.Sakura = (function () {
     m.classList.add('is-open');
     m.classList.toggle('is-top', openStack.length > 0); // stacked modal sits above
     openStack.push(id);
+        document.body.classList.add('modal-open');
     var first = m.querySelector('input:not([readonly]), select, textarea');
     if (first) setTimeout(function () { first.focus(); }, 50);
   }
@@ -42,6 +43,7 @@ window.Sakura = (function () {
     var m = document.getElementById(id);
     if (m) m.classList.remove('is-open', 'is-top');
     openStack = openStack.filter(function (x) { return x !== id; });
+        if (!openStack.length) document.body.classList.remove('modal-open');
   }
 
   document.addEventListener('click', function (e) {

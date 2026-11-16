@@ -1,0 +1,61 @@
+html { -webkit-text-size-adjust: 100%; }
+body.modal-open { overflow: hidden; }          /* page behind a pop-up doesn't scroll */
+
+/* ---------- touch screens: bigger tap targets ---------- */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; }
+  .icon-btn { min-width: 36px; min-height: 36px; display: inline-flex; align-items: center; justify-content: center; }
+  .nav a { padding: 14px 16px; }
+  .dropdown a { padding: 13px 14px; }
+}
+
+/* ---------- tablet ---------- */
+@media (max-width: 960px) {
+  .sidebar { height: 100vh; height: 100dvh; overflow-y: auto; overscroll-behavior: contain; }   /* dvh = real visible height on phones */
+  .prod-list { scroll-snap-type: x mandatory; }
+  .prod-card { scroll-snap-align: start; }
+}
+
+/* ---------- phone ---------- */
+@media (max-width: 600px) {
+  /* iPhones zoom into any input smaller than 16px, so keep them at 16px */
+  .input, .select, .textarea, .search input, .month-picker input { font-size: 16px; }
+
+  /* layout */
+  .content { padding: 16px 14px 28px; }
+  .card { padding: 16px; }
+  .card-head { flex-wrap: wrap; }
+  .topbar { gap: 10px; }
+  .topbar-title h1 { font-size: 19px; }
+  .topbar-title p { display: none; }
+  .avatar { width: 38px; height: 38px; }
+
+  /* dashboard */
+  .dash-head { flex-wrap: wrap; }
+  .stats { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stat { padding: 14px; }
+  .stat strong { font-size: 22px; }
+  .stat small { font-size: 11px; }
+  .chart { height: 170px; }
+  .chart-bars { gap: 6px; }
+
+  /* products + forms */
+  .prod-toolbar .select { flex: 1; min-width: 0; }
+  .sheet-foot .target, .sheet-foot .actions { width: 100%; }
+  .sheet-foot .actions .btn, .form-actions .btn { flex: 1; }
+  .summary { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 12px; }
+  .summary strong { font-size: 19px; }
+
+  /* pop-ups slide up from the bottom like a phone sheet */
+  .modal-overlay { padding: 0; align-items: flex-end; }
+  .modal, .modal-lg, .modal-sm { max-width: none; max-height: 92vh; max-height: 92dvh; border-radius: 20px 20px 0 0; }
+  .modal-head { padding: 18px 18px 4px; }
+  .modal-body { padding: 12px 18px; }
+  .modal-foot { padding: 12px 18px 18px; flex-wrap: wrap; }
+  .modal-foot .hint { width: 100%; }
+  .modal-foot .actions { width: 100%; }
+  .modal-foot .actions .btn { flex: 1; }
+
+  /* toast messages span the bottom */
+  .toast-wrap { left: 14px; right: 14px; bottom: 14px; }
+}
