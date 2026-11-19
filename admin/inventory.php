@@ -8,15 +8,13 @@ require_once __DIR__ . '/../includes/config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 $pageTitle = 'Inventory Management';
-$pageSubtitle = 'Track materials, stock levels and replenishment.';
+$pageSubtitle = '';
 $activePage = 'inventory';
-$pageCss = 'operations.css';
-$pageJs = 'operations.js';
+$pageCss = 'inventory.css';
+$pageJs = 'inventory.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="ops-page" id="operationsPage" data-module="inventory" data-demo="<?= $isDemo ? '1' : '0' ?>">
-  <div class="ops-banner" role="status"><strong><?= $isDemo ? 'Demo preview' : 'Database connection pending' ?></strong> &middot;
-  <?= $isDemo ? 'Fictitious materials. Changes are saved only in this browser tab, not in MySQL.' : 'Connect the authenticated inventory API to view and update actual stock. Editing is disabled.' ?></div>
   <section class="ops-stats" aria-label="Inventory overview">
     <article class="card ops-stat"><span>Materials</span><strong id="invTotal">0</strong><small>Tracked material types</small></article>
     <article class="card ops-stat"><span>Low Stock</span><strong id="invLow">0</strong><small>At or below reorder point</small></article>

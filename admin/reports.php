@@ -8,15 +8,13 @@ require_once __DIR__ . '/../includes/config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 $pageTitle = 'Financial Reports';
-$pageSubtitle = 'Understand sales, collections and inventory trends.';
+$pageSubtitle = '';
 $activePage = 'reports';
-$pageCss = 'operations.css';
-$pageJs = 'operations.js';
+$pageCss = 'reports.css';
+$pageJs = 'reports.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="ops-page" id="operationsPage" data-module="reports" data-demo="<?= $isDemo ? '1' : '0' ?>">
-  <div class="ops-banner" role="status"><strong><?= $isDemo ? 'Demo report' : 'Database connection pending' ?></strong> &middot;
-  <?= $isDemo ? 'Fictitious order, payment and material figures only. For layout and workflow review, not official accounting.' : 'Connect the orders, payments and inventory database before preparing real financial statements.' ?></div>
   <div class="ops-report-toolbar">
     <div><h2>Business Performance</h2><p class="card-sub">Order value is not the same as received payments.</p></div>
     <div class="ops-toolbar"><label class="sr-only" for="repPeriod">Report period</label><select class="select" id="repPeriod"><option value="all">All dates</option></select>

@@ -8,15 +8,13 @@ require_once __DIR__ . '/../includes/config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 $pageTitle = 'Order Management';
-$pageSubtitle = 'Keep every handcrafted customer order on track.';
+$pageSubtitle = '';
 $activePage = 'orders';
-$pageCss = 'operations.css';
-$pageJs = 'operations.js';
+$pageCss = 'orders.css';
+$pageJs = 'orders.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="ops-page" id="operationsPage" data-module="orders" data-demo="<?= $isDemo ? '1' : '0' ?>">
-  <div class="ops-banner" role="status"><strong><?= $isDemo ? 'Demo preview' : 'Database connection pending' ?></strong> &middot;
-  <?= $isDemo ? 'Fictitious orders. New orders and status updates stay in this browser tab, not in MySQL.' : 'Connect the authenticated Orders API to view and update actual orders. Editing is disabled.' ?></div>
   <section class="ops-stats" aria-label="Order overview">
     <article class="card ops-stat"><span>Total Orders</span><strong id="ordTotal">0</strong><small>All recorded orders</small></article>
     <article class="card ops-stat"><span>Pending</span><strong id="ordPending">0</strong><small>Awaiting production</small></article>
