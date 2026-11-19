@@ -6,46 +6,45 @@
   var demo = root.dataset.demo === '1';
   var $ = function (id) { return document.getElementById(id); };
   var key = 'sakura-operations-v1';
-  var statuses = ['Pending', 'In Progress', 'Completed', 'Delivered', 'Cancelled'];
-  var seededPayments = [
-    {id:'SLP-001', orderId:'ORD-001', amount:1200},
-    {id:'SLP-002', orderId:'ORD-002', amount:850},
-    {id:'SLP-003', orderId:'ORD-003', amount:1500},
-    {id:'SLP-004', orderId:'ORD-004', amount:600},
-    {id:'SLP-005', orderId:'ORD-005', amount:200}
+  var reportSeries = [
+    {month:'2026-05', revenue:11500, expenses:6500},
+    {month:'2026-06', revenue:14000, expenses:7700},
+    {month:'2026-07', revenue:16000, expenses:9000},
+    {month:'2026-08', revenue:17500, expenses:9800},
+    {month:'2026-09', revenue:21500, expenses:13000},
+    {month:'2026-10', revenue:24500, expenses:14200}
   ];
+  var expenseCategories = ['Materials', 'Labor', 'Packaging & overhead'];
+  var statuses = ['Pending', 'In Progress', 'Completed', 'Delivered'];
+
+  function makeSampleOrders() {
+    var products = ['Pearl Heart Bag', 'Sakura Mini Pouch', 'Classic Tote', 'Petal Handbag'];
+    var orders = [];
+    for (var index = 0; index < 32; index += 1) {
+      orders.push({
+        id:'ORD-' + String(index + 1).padStart(3, '0'),
+        customer:'Customer ' + String(index + 1).padStart(2, '0'),
+        product:products[index % products.length],
+        qty:1,
+        unitPrice:index === 31 ? 785 : 765,
+        total:index === 31 ? 785 : 765,
+        date:'2026-10-' + String(index % 28 + 1).padStart(2, '0'),
+        status:statuses[index % statuses.length]
+      });
+    }
+    return orders;
+  }
   function loadState() {
     var state = {materials:[], orders:[]};
     if (!demo) return state;
-    var sampleState = {
-      materials:[
-        {id:'MAT-001',name:'Pink Beads',unit:'pcs',cost:2,stock:10,min:50},
-        {id:'MAT-002',name:'Nylon Thread',unit:'roll',cost:40,stock:3,min:5},
-        {id:'MAT-003',name:'Bag Handles',unit:'pcs',cost:55,stock:5,min:10},
-        {id:'MAT-004',name:'Rose Crystal Beads',unit:'pcs',cost:2,stock:600,min:100},
-        {id:'MAT-005',name:'Ivory Pearl Beads',unit:'pcs',cost:3,stock:450,min:100},
-        {id:'MAT-006',name:'Clasps',unit:'pcs',cost:30,stock:4,min:10},
-        {id:'MAT-007',name:'Pink Ribbon',unit:'roll',cost:25,stock:2,min:5}
-      ],
-      orders:[
-        {id:'ORD-001',customer:'Maria Santos',product:'Pearl Heart Bag',qty:1,unitPrice:1200,total:1200,date:'2026-10-28',status:'Pending'},
-        {id:'ORD-002',customer:'Ana Reyes',product:'Sakura Mini Pouch',qty:1,unitPrice:850,total:850,date:'2026-10-28',status:'In Progress'},
-        {id:'ORD-003',customer:'Camille Cruz',product:'Classic Tote',qty:1,unitPrice:1500,total:1500,date:'2026-10-26',status:'Completed'},
-        {id:'ORD-004',customer:'Isabel Garcia',product:'Petal Handbag',qty:1,unitPrice:1200,total:1200,date:'2026-10-25',status:'Pending'},
-        {id:'ORD-005',customer:'Sofia Ramos',product:'Beaded Phone Bag',qty:1,unitPrice:800,total:800,date:'2026-10-25',status:'In Progress'},
-        {id:'ORD-006',customer:'Louise Santos',product:'Daisy Set',qty:1,unitPrice:1800,total:1800,date:'2026-10-23',status:'Delivered'},
-        {id:'ORD-007',customer:'Michelle Cruz',product:'Pink Ribbon Bag',qty:1,unitPrice:975,total:975,date:'2026-10-22',status:'Pending'}
-      ]
-    };
     try {
-      var stored = JSON.parse(sessionStorage.getItem(key));
+      var stored = JSON.parse(sessionStorage.getItem(key) || 'null');
       if (stored && Array.isArray(stored.materials)) state.materials = stored.materials;
       if (stored && Array.isArray(stored.orders)) state.orders = stored.orders;
-      if (!Array.isArray(state.materials) || !state.materials.length) state.materials = sampleState.materials;
-      if (!Array.isArray(state.orders) || !state.orders.length) state.orders = sampleState.orders;
-    } catch (_) {}
-    if (!state.materials.length) state.materials = sampleState.materials;
-    if (!state.orders.length) state.orders = sampleState.orders;
+    } catch (error) {
+      notify('Could not read demo report data from this browser session.');
+    }
+    if (!state.orders.length) state.orders = makeSampleOrders();
     return state;
   }
   var state = loadState();
@@ -55,117 +54,210 @@
     });
   }
   function money(value) {
+    return '₱' + Number(value || 0).toLocaleString('en-PH', {maximumFractionDigits:0});
+  }
+  function money2(value) {
     return '₱' + Number(value || 0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
   }
-  function reportData() {
-    var month = $('repPeriod').value;
-    var all = state.orders.filter(function (order) { return month === 'all' || order.date.slice(0,7) === month; });
-    var valid = all.filter(function (order) { return order.status !== 'Cancelled'; });
-    var total = valid.reduce(function (sum, order) { return sum + Math.round(order.total * 100); }, 0);
-    var orderTotals = {};
-    valid.forEach(function (order) { orderTotals[order.id] = Math.round(order.total * 100); });
-    var collected = {};
-    var payments = seededPayments.slice();
-    try {
-      var stored = JSON.parse(sessionStorage.getItem('sakura-demo-payments-v1') || '[]');
-      if (Array.isArray(stored)) payments = payments.concat(stored);
-    } catch (_) {}
-    payments.forEach(function (payment) {
-      if (orderTotals[payment.orderId] == null) return;
-      collected[payment.orderId] = (collected[payment.orderId] || 0) + Math.round(Number(payment.amount || 0) * 100);
-    });
-    var received = Object.keys(collected).reduce(function (sum, id) {
-      return sum + Math.min(orderTotals[id], collected[id]);
-    }, 0);
-    return {all:all, valid:valid, total:total, received:received, due:Math.max(0,total-received), month:month};
+  function notify(message) {
+    if (window.Sakura && Sakura.toast) Sakura.toast(message);
+  }
+  function monthText(month, options) {
+    var date = new Date(month + '-01T00:00:00');
+    return date.toLocaleDateString('en-US', options);
+  }
+  function monthRange(month) {
+    if (!month || month === 'all') return 'All dates';
+    var date = new Date(month + '-01T00:00:00');
+    var end = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    return monthText(month, {month:'short'}) + ' 1 \u2013 ' + end + ', ' + date.getFullYear();
   }
   function updatePeriods() {
-    var oldValue = $('repPeriod').value || 'all';
-    var months = state.orders.map(function (order) { return order.date.slice(0,7); })
-      .filter(function (month, index, list) { return list.indexOf(month) === index; }).sort().reverse();
-    $('repPeriod').innerHTML = '<option value="all">All dates</option>' + months.map(function (month) {
-      var text = new Date(month + '-01T00:00:00').toLocaleDateString('en-PH', {month:'long',year:'numeric'});
-      return '<option value="' + esc(month) + '">' + esc(text) + '</option>';
+    var oldValue = $('repPeriod').value;
+    var months = state.orders.map(function (order) { return order.date.slice(0, 7); })
+      .filter(function (month, index, list) { return list.indexOf(month) === index; })
+      .sort().reverse();
+    $('repPeriod').innerHTML = months.map(function (month) {
+      return '<option value="' + esc(month) + '">' + esc(monthRange(month)) + '</option>';
     }).join('');
-    $('repPeriod').value = months.indexOf(oldValue) !== -1 ? oldValue : 'all';
+    if (months.length > 1 || !months.length) {
+      $('repPeriod').insertAdjacentHTML('beforeend', '<option value="all">All dates</option>');
+    }
+    $('repPeriod').value = months.indexOf(oldValue) !== -1 || oldValue === 'all' ? oldValue : (months[0] || 'all');
+  }
+  function expenseDetails(month) {
+    var expenses = 0;
+    if (month === 'all') {
+      var months = state.orders.map(function (order) { return order.date.slice(0, 7); })
+        .filter(function (item, index, list) { return list.indexOf(item) === index; });
+      months.forEach(function (item) {
+        var fixture = reportSeries.find(function (row) { return row.month === item; });
+        if (fixture) expenses += fixture.expenses;
+      });
+    } else {
+      var fixture = reportSeries.find(function (row) { return row.month === month; });
+      if (fixture) expenses = fixture.expenses;
+    }
+    if (!demo) expenses = 0;
+    var materials = Math.round(expenses * 0.5774647887);
+    var labor = Math.round(expenses * 0.2816901408);
+    var overhead = expenses - materials - labor;
+    return [
+      {name:expenseCategories[0], amount:materials},
+      {name:expenseCategories[1], amount:labor},
+      {name:expenseCategories[2], amount:overhead}
+    ];
+  }
+  function reportData() {
+    var month = $('repPeriod').value || 'all';
+    var all = state.orders.filter(function (order) {
+      return month === 'all' || order.date.slice(0, 7) === month;
+    });
+    var valid = all.filter(function (order) { return order.status !== 'Cancelled'; });
+    var revenue = valid.reduce(function (sum, order) { return sum + Number(order.total || 0); }, 0);
+    var expenses = expenseDetails(month).reduce(function (sum, entry) { return sum + entry.amount; }, 0);
+    return {
+      all:all,
+      valid:valid,
+      month:month,
+      revenue:revenue,
+      expenses:expenses,
+      profit:revenue - expenses,
+      expenseDetails:expenseDetails(month)
+    };
+  }
+  function groupSeries(granularity) {
+    if (granularity === 'monthly') {
+      return reportSeries.map(function (row) {
+        return {label:monthText(row.month, {month:'short'}), revenue:row.revenue, expenses:row.expenses};
+      });
+    }
+    var grouped = {};
+    reportSeries.forEach(function (row) {
+      var date = new Date(row.month + '-01T00:00:00');
+      var key = granularity === 'yearly' ? String(date.getFullYear()) :
+        String(date.getFullYear()) + '-Q' + Math.ceil((date.getMonth() + 1) / 3);
+      if (!grouped[key]) grouped[key] = {label:granularity === 'yearly' ? key : key.slice(-2), revenue:0, expenses:0};
+      grouped[key].revenue += row.revenue;
+      grouped[key].expenses += row.expenses;
+    });
+    return Object.keys(grouped).sort().map(function (item) { return grouped[item]; });
+  }
+  function chartMax(series) {
+    var highest = Math.max.apply(null, [0].concat(series.map(function (row) {
+      return Math.max(row.revenue, row.expenses);
+    })));
+    return Math.max(25000, Math.ceil(highest / 5000) * 5000);
+  }
+  function axisLabel(value) {
+    if (!value) return '₱0';
+    var thousands = value / 1000;
+    return '₱' + (Number.isInteger(thousands) ? thousands : thousands.toFixed(1)) + 'k';
+  }
+  function renderCharts() {
+    var granularity = $('repGranularity').value;
+    var series = demo ? groupSeries(granularity) : [];
+    var max = chartMax(series);
+    var monthRangeText = reportSeries.length ?
+      monthText(reportSeries[0].month, {month:'long'}) + '\u2013' +
+      monthText(reportSeries[reportSeries.length - 1].month, {month:'long', year:'numeric'}) : '';
+    $('repSalesTitle').textContent = granularity === 'monthly' ? 'Monthly Sales' :
+      (granularity === 'quarterly' ? 'Quarterly Sales' : 'Yearly Sales');
+    $('repSalesSubtitle').textContent = monthRangeText + ' · Order revenue';
+    var previous = series.length > 1 ? series[series.length - 2].revenue : 0;
+    var latest = series.length ? series[series.length - 1].revenue : 0;
+    var trend = previous ? ((latest - previous) / previous) * 100 : 0;
+    $('repSalesTrend').textContent = (trend >= 0 ? '+' : '') + trend.toFixed(1) + '%';
+    var axis = '<div class="rep-chart-axis"><span>' + axisLabel(max) + '</span><span>' +
+      axisLabel(max / 2) + '</span><span>₱0</span></div>';
+    $('repBars').innerHTML = axis + '<div class="rep-chart-plot">' + series.map(function (row) {
+      var percent = Math.max(2, row.revenue / max * 100);
+      return '<div class="rep-chart-column"><div class="rep-sales-track"><div class="rep-sales-bar" style="height:' +
+        percent + '%" title="' + esc(money(row.revenue)) + '"></div></div><span class="rep-chart-label">' +
+        esc(row.label) + '</span></div>';
+    }).join('') + '</div>';
+    $('repComparison').innerHTML = axis + '<div class="rep-chart-plot">' + series.map(function (row) {
+      var revenueHeight = Math.max(2, row.revenue / max * 100);
+      var expenseHeight = Math.max(2, row.expenses / max * 100);
+      return '<div class="rep-chart-column"><div class="rep-compare-track"><div class="rep-compare-bar rep-revenue-bar" style="height:' +
+        revenueHeight + '%" title="Revenue: ' + esc(money(row.revenue)) + '"></div><div class="rep-compare-bar rep-expense-bar" style="height:' +
+        expenseHeight + '%" title="Expenses: ' + esc(money(row.expenses)) + '"></div></div><span class="rep-chart-label">' +
+        esc(row.label) + '</span></div>';
+    }).join('') + '</div>';
+    $('repChartEmpty').hidden = series.length > 0;
   }
   function render() {
     var data = reportData();
-    $('repSales').textContent = money(data.total / 100);
-    $('repReceived').textContent = money(data.received / 100);
-    $('repDue').textContent = money(data.due / 100);
-    $('repInventory').textContent = money(state.materials.reduce(function (sum, material) {
-      return sum + Math.round(material.stock * material.cost * 100);
-    }, 0) / 100);
-    $('repOrdersNote').textContent = data.valid.length + ' active order' + (data.valid.length === 1 ? '' : 's');
-
-    var months = {};
-    data.valid.forEach(function (order) {
-      var month = order.date.slice(0,7);
-      months[month] = (months[month] || 0) + Math.round(order.total * 100);
-    });
-    var monthKeys = Object.keys(months).sort();
-    var max = Math.max.apply(null, [1].concat(monthKeys.map(function (month) { return months[month]; })));
-    $('repBars').innerHTML = monthKeys.map(function (month) {
-      var label = new Date(month + '-01T00:00:00').toLocaleDateString('en-PH', {month:'short',year:'2-digit'});
-      var percent = Math.max(2, Math.round(months[month] / max * 100));
-      return '<div class="ops-bar-group"><strong class="ops-bar-value">' + money(months[month]/100) +
-        '</strong><div class="ops-bar-track"><div class="ops-bar-fill" style="height:' + percent +
-        '%"></div></div><span class="ops-bar-label">' + esc(label) + '</span></div>';
+    var margin = data.revenue ? data.profit / data.revenue * 100 : 0;
+    var average = data.valid.length ? data.revenue / data.valid.length : 0;
+    var selectedMonth = data.month === 'all' ? '' : data.month;
+    var selectedMonthName = selectedMonth ? monthText(selectedMonth, {month:'long'}) : 'All periods';
+    var selectedYear = selectedMonth ? new Date(selectedMonth + '-01T00:00:00').getFullYear() : '';
+    var previousRow = reportSeries.find(function (row) { return row.month === '2026-09'; });
+    var currentRow = reportSeries.find(function (row) { return row.month === '2026-10'; });
+    var revenueChange = currentRow && previousRow ? currentRow.revenue - previousRow.revenue : 0;
+    var previousProfit = previousRow ? previousRow.revenue - previousRow.expenses : 0;
+    var profitChange = currentRow && previousRow ? data.profit - previousProfit : 0;
+    $('repRevenue').textContent = money(data.revenue);
+    $('repExpenses').textContent = money(data.expenses);
+    $('repProfit').textContent = money(data.profit);
+    $('repOrders').textContent = data.valid.length;
+    $('repRevenueNote').textContent = selectedMonth === '2026-10' ? '+14.0% vs September' :
+      (data.revenue ? 'Current period revenue' : 'No revenue recorded');
+    $('repProfitNote').textContent = margin.toFixed(1) + '% net profit margin';
+    $('repOrderAverage').textContent = money2(average) + ' average order value';
+    $('repAnalysisSubtitle').textContent = selectedMonth ?
+      selectedMonthName + ' ' + selectedYear + ' · Revenue less recorded expenses' : 'All dates · Revenue less recorded expenses';
+    $('repExpensesTable').innerHTML = data.expenseDetails.map(function (entry) {
+      var share = data.revenue ? entry.amount / data.revenue * 100 : 0;
+      return '<tr><td>' + esc(entry.name) + '</td><td>' + money(entry.amount) + '</td><td>' +
+        share.toFixed(1) + '%</td></tr>';
     }).join('');
-    $('repChartEmpty').hidden = monthKeys.length > 0;
-
-    var statusCounts = statuses.map(function (status) {
-      return {label:status, count:data.all.filter(function (order) { return order.status === status; }).length};
-    });
-    $('repStatuses').innerHTML = statusCounts.map(function (status) {
-      var width = data.all.length ? Math.round(status.count / data.all.length * 100) : 0;
-      return '<div class="ops-breakdown-row"><span>' + esc(status.label) +
-        '</span><div class="ops-breakdown-track"><div class="ops-breakdown-fill" style="width:' +
-        width + '%"></div></div><span class="ops-breakdown-count">' + status.count + '</span></div>';
-    }).join('');
-
-    var products = {};
-    data.valid.forEach(function (order) {
-      var key = order.product.trim().toLowerCase();
-      if (!products[key]) products[key] = {name:order.product, units:0, amount:0};
-      products[key].units += order.qty;
-      products[key].amount += Math.round(order.total * 100);
-    });
-    var ranked = Object.keys(products).map(function (key) { return products[key]; })
-      .sort(function (a,b) { return b.amount-a.amount; }).slice(0,8);
-    $('repTop').innerHTML = ranked.map(function (product) {
-      return '<tr><td>' + esc(product.name) + '</td><td>' + product.units + '</td><td>' +
-        money(product.amount/100) + '</td></tr>';
-    }).join('');
-    $('repTopEmpty').hidden = ranked.length > 0;
-
-    var low = state.materials.filter(function (material) {
-      return material.stock <= material.min;
-    });
-    $('repLow').innerHTML = low.map(function (material) {
-      return '<tr><td>' + esc(material.name) + '</td><td>' + material.stock + ' ' + esc(material.unit) +
-        '</td><td>' + material.min + ' ' + esc(material.unit) + '</td></tr>';
-    }).join('');
-    $('repLowEmpty').hidden = low.length > 0;
+    $('repNetProfit').textContent = money(data.profit) + ' · ' + margin.toFixed(1) + '%';
+    $('repGlanceTitle').textContent = selectedMonthName + ' at a glance';
+    $('repMargin').textContent = margin.toFixed(1) + '%';
+    $('repMarginBar').style.width = Math.max(0, Math.min(100, margin)) + '%';
+    $('repGlanceText').textContent = selectedMonth === '2026-10' ?
+      'Revenue grew by ' + money(revenueChange) + ' from September, while net profit increased by ' +
+      money(profitChange) + '.' : 'Revenue and expenses for the selected reporting period.';
+    $('repCalculation').textContent = 'Revenue: ' + money(data.revenue) + ' - Expenses: ' + money(data.expenses);
+    $('repPrepared').textContent = 'Prepared ' + (selectedMonth ? monthText(selectedMonth, {month:'long'}) + ' 28, ' + selectedYear : 'current period') +
+      ' · Currency: PHP (₱)';
+    renderCharts();
   }
   $('repPeriod').addEventListener('change', render);
+  $('repGranularity').addEventListener('change', renderCharts);
   $('repExport').addEventListener('click', function () {
     var data = reportData();
-    var rows = [['SAKURA BEADED BAGS - DEMO REPORT'],['Period',data.month === 'all' ? 'All dates' : data.month],
-      ['Metric','Amount PHP'],['Order Value',data.total/100],['Payments Received',data.received/100],
-      ['Unpaid Balance',data.due/100],
-      ['Inventory Value',state.materials.reduce(function (sum,m) { return sum + m.stock*m.cost; },0)],
-      [],['Order ID','Date','Customer','Product','Qty','Order Value PHP','Status']];
+    var rows = [
+      ['SAKURA BEADED BAGS - DEMO FINANCIAL REPORT'],
+      ['Period', monthRange(data.month)],
+      ['Metric','Amount PHP'],
+      ['Revenue',data.revenue],
+      ['Expenses',data.expenses],
+      ['Net Profit',data.profit],
+      ['Orders',data.valid.length],
+      [],
+      ['Expense Category','Amount PHP','Share of Revenue']
+    ];
+    data.expenseDetails.forEach(function (entry) {
+      rows.push([entry.name,entry.amount,data.revenue ? (entry.amount / data.revenue * 100).toFixed(1) + '%' : '0.0%']);
+    });
+    rows.push([],['Order ID','Date','Customer','Product','Qty','Order Value PHP','Status']);
     data.all.forEach(function (order) {
       rows.push([order.id,order.date,order.customer,order.product,order.qty,order.total,order.status]);
     });
     var csv = '\ufeff' + rows.map(function (row) {
-      return row.map(function (value) { return '"' + String(value).replace(/"/g,'""') + '"'; }).join(',');
+      return row.map(function (value) { return '"' + String(value).replace(/"/g, '""') + '"'; }).join(',');
     }).join('\r\n');
     var url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
     var link = document.createElement('a');
-    link.href = url; link.download = 'sakura-financial-report-DEMO.csv'; document.body.appendChild(link); link.click(); link.remove();
+    link.href = url;
+    link.download = 'sakura-financial-report-DEMO.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   });
   $('repPrint').addEventListener('click', function () { window.print(); });
   updatePeriods();

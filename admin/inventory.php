@@ -8,59 +8,165 @@ require_once __DIR__ . '/../includes/config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 $isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 $pageTitle = 'Inventory Management';
-$pageSubtitle = '';
+$pageSubtitle = 'Every bead accounted for, every bag ready to begin.';
 $activePage = 'inventory';
 $pageCss = 'inventory.css';
 $pageJs = 'inventory.js';
+$pageBodyClass = 'inventory-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="ops-page" id="operationsPage" data-module="inventory" data-demo="<?= $isDemo ? '1' : '0' ?>">
   <section class="ops-stats" aria-label="Inventory overview">
-    <article class="card ops-stat"><span>Materials</span><strong id="invTotal">0</strong><small>Tracked material types</small></article>
-    <article class="card ops-stat"><span>Low Stock</span><strong id="invLow">0</strong><small>At or below reorder point</small></article>
-    <article class="card ops-stat"><span>Out of Stock</span><strong id="invOut">0</strong><small>Materials to replenish</small></article>
-    <article class="card ops-stat"><span>Inventory Value</span><strong id="invValue">₱0</strong><small>Quantity × unit cost</small></article>
+    <article class="card inv-stat">
+      <div><span>Material Types</span><?= icon('inventory') ?></div>
+      <strong id="invTotal">0</strong>
+      <small>Across 6 material categories</small>
+    </article>
+    <article class="card inv-stat">
+      <div><span>Inventory Value</span><?= icon('wallet') ?></div>
+      <strong id="invValue">₱0</strong>
+      <small>Current stock at unit cost</small>
+    </article>
+    <article class="card inv-stat">
+      <div><span>Low Stock Items</span><?= icon('alert') ?></div>
+      <strong id="invLow">0</strong>
+      <small>Below reorder thresholds</small>
+    </article>
+    <article class="card inv-stat">
+      <div><span>Stock-In This Month</span><?= icon('box') ?></div>
+      <strong id="invStockInCount">0</strong>
+      <small>Latest delivery: October 28</small>
+    </article>
   </section>
-  <section class="card ops-section">
-    <div class="ops-heading">
-      <div><h2>Materials Inventory</h2><p class="card-sub">Monitor stock and record incoming or used materials.</p></div>
-      <div class="ops-toolbar">
-        <button type="button" class="btn btn-outline btn-sm" id="invExport">Export CSV</button>
-        <button type="button" class="btn btn-primary" id="invNew" <?= $isDemo ? '' : 'disabled' ?>><?= icon('plus') ?> Add Material</button>
+  <section class="card inv-inventory-panel">
+    <div class="inv-toolbar">
+      <label class="inv-search">
+        <span class="sr-only">Search material ID or name</span>
+        <?= icon('search') ?>
+        <input type="search" id="invSearch" placeholder="Search material ID or name">
+      </label>
+      <div class="inv-toolbar-actions">
+        <button type="button" class="btn inv-correction-button" id="invOpenCorrection" <?= $isDemo ? '' : 'disabled' ?>>
+          <?= icon('sliders') ?><span>Stock<br>Correction</span>
+        </button>
+        <button type="button" class="btn btn-primary inv-stockin-button" id="invOpenStockIn" <?= $isDemo ? '' : 'disabled' ?>>
+          <?= icon('plus') ?><span>Stock-In</span>
+        </button>
       </div>
     </div>
-    <div class="ops-filters">
-      <label class="ops-field-search"><span class="sr-only">Search inventory</span><input class="input" type="search" id="invSearch" placeholder="Search material or ID"></label>
-      <label class="sr-only" for="invFilter">Stock status</label>
-      <select class="select" id="invFilter"><option value="all">All stock levels</option><option value="low">Low stock</option><option value="out">Out of stock</option><option value="good">In stock</option></select>
+    <div class="inv-table-wrap">
+      <table class="inv-table">
+        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Cost</th><th>Quantity</th><th>Threshold</th><th>Status</th></tr></thead>
+        <tbody id="invRows"></tbody>
+      </table>
+      <p class="inv-empty" id="invEmpty" hidden>No materials match your search.</p>
     </div>
-    <div class="table-wrap"><table class="table ops-table">
-      <thead><tr><th>Material ID</th><th>Material</th><th>Unit</th><th>Unit Cost</th><th>On Hand</th><th>Reorder At</th><th>Value</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody id="invRows"></tbody>
-    </table></div>
-    <p class="ops-empty" id="invEmpty" hidden>No materials match your search.</p>
-    <p class="ops-foot" id="invFoot">0 materials</p>
   </section>
-  <div class="modal-overlay" id="invCreateModal" role="dialog" aria-modal="true" aria-labelledby="invModalTitle">
-    <div class="modal"><div class="modal-head"><div><h2 id="invModalTitle">Add Material</h2><p>Set the unit, cost and initial stock.</p></div><button type="button" class="icon-btn" data-close-modal="invCreateModal" aria-label="Close"><?= icon('x') ?></button></div>
-      <form id="invCreateForm"><div class="modal-body">
-        <div class="field"><label for="invName">Material name *</label><input class="input" id="invName" maxlength="80" required></div>
-        <div class="form-row"><div class="field"><label for="invUnit">Unit *</label><select class="select" id="invUnit"><option>pcs</option><option>roll</option><option>pack</option><option>meter</option><option>set</option></select></div>
-        <div class="field"><label for="invCost">Unit cost (₱) *</label><input class="input" id="invCost" type="number" min="0" max="1000000" step="0.01" value="0" required></div></div>
-        <div class="form-row"><div class="field"><label for="invQty">Opening quantity *</label><input class="input" id="invQty" type="number" min="0" max="1000000" step="1" value="0" required></div>
-        <div class="field"><label for="invMin">Reorder point *</label><input class="input" id="invMin" type="number" min="0" max="1000000" step="1" value="10" required></div></div>
-        <p class="ops-error" id="invCreateError" role="alert" hidden></p>
-      </div><div class="modal-foot"><button type="button" class="btn btn-outline" data-close-modal="invCreateModal">Cancel</button><button type="submit" class="btn btn-primary">Add Demo Material</button></div></form>
+  <section class="inv-lower-grid">
+    <article class="card inv-history-panel">
+      <div class="inv-panel-heading">
+        <h2>Inventory History</h2>
+        <button type="button" id="invHistoryToggle">View all <span aria-hidden="true">→</span></button>
+      </div>
+      <ul class="inv-history-list" id="invHistoryRows"></ul>
+    </article>
+    <article class="card inv-alert-panel">
+      <h2>Low Stock Alerts</h2>
+      <p>Replenish these before accepting new orders.</p>
+      <ul class="inv-alert-list" id="invLowAlerts"></ul>
+    </article>
+  </section>
+  <div class="modal-overlay inv-overlay" id="invStockInModal" role="dialog" aria-modal="true" aria-labelledby="invStockInTitle">
+    <div class="modal inv-dialog inv-stockin-dialog">
+      <div class="modal-head inv-dialog-head">
+        <div><h2 id="invStockInTitle">Stock-In</h2><p>Receive a delivery and update the material balance.</p></div>
+        <button type="button" class="icon-btn" data-close-modal="invStockInModal" aria-label="Close"><?= icon('x') ?></button>
+      </div>
+      <form id="invStockInForm">
+        <div class="modal-body inv-dialog-body">
+          <div class="inv-dialog-field">
+            <label for="invStockInMaterial">Material *</label>
+            <div class="inv-control">
+              <select id="invStockInMaterial" required></select>
+              <span class="inv-select-caret" aria-hidden="true"><?= icon('chevron') ?></span>
+              <button type="button" class="inv-edit" data-focus="invStockInMaterial" aria-label="Edit material"><?= icon('edit') ?></button>
+            </div>
+          </div>
+          <div class="inv-balance">
+            <span>Current balance</span>
+            <strong id="invCurrentBalance">0 pcs</strong>
+          </div>
+          <div class="inv-field-row">
+            <div class="inv-dialog-field">
+              <label for="invStockInQty">Received quantity *</label>
+              <div class="inv-control inv-quantity-control">
+                <input id="invStockInQty" type="number" min="1" max="1000000" step="1" value="200" required>
+                <span class="inv-unit" id="invStockInUnit">pcs</span>
+                <button type="button" class="inv-edit" data-focus="invStockInQty" aria-label="Edit received quantity"><?= icon('edit') ?></button>
+              </div>
+            </div>
+            <div class="inv-dialog-field">
+              <label for="invStockInCost">Unit cost *</label>
+              <div class="inv-control inv-cost-control">
+                <span class="inv-currency">₱</span>
+                <input id="invStockInCost" type="number" min="0" max="1000000" step="0.01" value="2.00" required>
+                <button type="button" class="inv-edit" data-focus="invStockInCost" aria-label="Edit unit cost"><?= icon('edit') ?></button>
+              </div>
+            </div>
+          </div>
+          <div class="inv-dialog-field inv-date-field">
+            <label for="invStockInDate">Date *</label>
+            <div class="inv-control">
+              <input id="invStockInDate" type="text" value="Oct 28, 2026" required>
+              <button type="button" class="inv-edit" data-focus="invStockInDate" aria-label="Edit date"><?= icon('edit') ?></button>
+            </div>
+          </div>
+          <div class="inv-stockin-summary">
+            <span id="invStockInMath">10 pcs + 200 pcs received</span>
+            <strong id="invStockInNewBalance">New balance: 210 pcs</strong>
+            <small id="invStockInValue">Value: ₱400.00</small>
+          </div>
+          <p class="inv-dialog-error" id="invStockInError" role="alert" hidden></p>
+        </div>
+        <div class="modal-foot inv-dialog-foot">
+          <span>* Required fields</span>
+          <div><button type="button" class="btn inv-cancel-button" data-close-modal="invStockInModal">Cancel</button>
+            <button type="submit" class="btn btn-primary inv-save-button">Save Stock-In</button></div>
+        </div>
+      </form>
     </div>
   </div>
   <div class="modal-overlay" id="invAdjustModal" role="dialog" aria-modal="true" aria-labelledby="invAdjustTitle">
-    <div class="modal"><div class="modal-head"><div><h2 id="invAdjustTitle">Stock Adjustment</h2><p id="invAdjustDescription">Record stock movement.</p></div><button type="button" class="icon-btn" data-close-modal="invAdjustModal" aria-label="Close"><?= icon('x') ?></button></div>
-      <form id="invAdjustForm"><div class="modal-body">
-        <input type="hidden" id="invAdjustId">
-        <div class="field"><label for="invDirection">Movement *</label><select class="select" id="invDirection"><option value="in">Stock In (+)</option><option value="out">Stock Out (−)</option></select></div>
-        <div class="field"><label for="invAdjustQty">Quantity *</label><input class="input" id="invAdjustQty" type="number" min="1" max="1000000" step="1" value="1" required></div>
-        <p class="ops-error" id="invAdjustError" role="alert" hidden></p>
-      </div><div class="modal-foot"><button type="button" class="btn btn-outline" data-close-modal="invAdjustModal">Cancel</button><button type="submit" class="btn btn-primary">Save Demo Adjustment</button></div></form>
+    <div class="modal inv-dialog inv-correction-dialog">
+      <div class="modal-head inv-dialog-head">
+        <div><h2 id="invAdjustTitle">Stock Correction</h2><p>Record a manual stock balance correction.</p></div>
+        <button type="button" class="icon-btn" data-close-modal="invAdjustModal" aria-label="Close"><?= icon('x') ?></button>
+      </div>
+      <form id="invAdjustForm">
+        <div class="modal-body inv-dialog-body">
+          <div class="inv-dialog-field">
+            <label for="invAdjustId">Material *</label>
+            <select id="invAdjustId" required></select>
+          </div>
+          <div class="inv-balance"><span>Current balance</span><strong id="invAdjustBalance">0 pcs</strong></div>
+          <div class="inv-field-row">
+            <div class="inv-dialog-field">
+              <label for="invDirection">Correction *</label>
+              <select id="invDirection"><option value="in">Add stock (+)</option><option value="out">Remove stock (−)</option></select>
+            </div>
+            <div class="inv-dialog-field">
+              <label for="invAdjustQty">Quantity *</label>
+              <input id="invAdjustQty" type="number" min="1" max="1000000" step="1" value="1" required>
+            </div>
+          </div>
+          <p class="inv-dialog-error" id="invAdjustError" role="alert" hidden></p>
+        </div>
+        <div class="modal-foot inv-dialog-foot">
+          <span>* Required fields</span>
+          <div><button type="button" class="btn inv-cancel-button" data-close-modal="invAdjustModal">Cancel</button>
+            <button type="submit" class="btn btn-primary inv-save-button">Save Correction</button></div>
+        </div>
+      </form>
     </div>
   </div>
 </section>
