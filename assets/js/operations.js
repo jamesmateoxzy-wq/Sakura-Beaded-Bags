@@ -10,26 +10,7 @@
   var key = 'sakura-operations-v1';
   var $ = function (id) { return document.getElementById(id); };
   var allowedStatuses = ['Pending', 'In Progress', 'Completed', 'Delivered', 'Cancelled'];
-  var samples = {
-    materials: [
-      { id:'MAT-001', name:'Pink Beads', unit:'pcs', cost:2, stock:10, min:50 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', cost:40, stock:3, min:5 },
-      { id:'MAT-003', name:'Bag Handles', unit:'pcs', cost:55, stock:5, min:10 },
-      { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', cost:2, stock:600, min:100 },
-      { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', cost:3, stock:450, min:100 },
-      { id:'MAT-006', name:'Clasps', unit:'pcs', cost:30, stock:4, min:10 },
-      { id:'MAT-007', name:'Pink Ribbon', unit:'roll', cost:25, stock:2, min:5 }
-    ],
-    orders: [
-      { id:'ORD-001', customer:'Maria Santos', product:'Pearl Heart Bag', qty:1, unitPrice:1200, total:1200, date:'2026-10-28', status:'Pending' },
-      { id:'ORD-002', customer:'Ana Reyes', product:'Sakura Mini Pouch', qty:1, unitPrice:850, total:850, date:'2026-10-28', status:'In Progress' },
-      { id:'ORD-003', customer:'Camille Cruz', product:'Classic Tote', qty:1, unitPrice:1500, total:1500, date:'2026-10-26', status:'Completed' },
-      { id:'ORD-004', customer:'Isabel Garcia', product:'Petal Handbag', qty:1, unitPrice:1200, total:1200, date:'2026-10-25', status:'Pending' },
-      { id:'ORD-005', customer:'Sofia Ramos', product:'Beaded Phone Bag', qty:1, unitPrice:800, total:800, date:'2026-10-25', status:'In Progress' },
-      { id:'ORD-006', customer:'Louise Santos', product:'Daisy Set', qty:1, unitPrice:1800, total:1800, date:'2026-10-23', status:'Delivered' },
-      { id:'ORD-007', customer:'Michelle Cruz', product:'Pink Ribbon Bag', qty:1, unitPrice:975, total:975, date:'2026-10-22', status:'Pending' }
-    ]
-  };
+  var samples = { materials:[], orders:[] };
 
   function cleanState(raw) {
     if (!raw || !Array.isArray(raw.materials) || !Array.isArray(raw.orders) ||
@@ -290,13 +271,7 @@
   }
 
   // These 5 payments match the existing Payments & Sales page's fictitious seed.
-  var seededPayments = [
-    {id:'SLP-001',orderId:'ORD-001',amount:1200},
-    {id:'SLP-002',orderId:'ORD-002',amount:850},
-    {id:'SLP-003',orderId:'ORD-003',amount:1500},
-    {id:'SLP-004',orderId:'ORD-004',amount:600},
-    {id:'SLP-005',orderId:'ORD-005',amount:200}
-  ];
+  var seededPayments = [];
   function knownPayments() {
     var result = seededPayments.slice();
     if (!demo) return [];

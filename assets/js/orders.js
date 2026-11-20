@@ -9,37 +9,10 @@
   var key = 'sakura-operations-v1';
   var storageUnavailable = false;
   var storageFailureReported = false;
-  var materialsSeed = [
-    { id:'MAT-001', name:'Pink Beads', unit:'pcs', cost:2, stock:10, min:50 },
-    { id:'MAT-002', name:'Nylon Thread', unit:'roll', cost:40, stock:3, min:5 },
-    { id:'MAT-003', name:'Bag Handles', unit:'pcs', cost:55, stock:5, min:10 },
-    { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', cost:2, stock:600, min:100 },
-    { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', cost:3, stock:450, min:100 },
-    { id:'MAT-006', name:'Clasps', unit:'pcs', cost:30, stock:4, min:10 },
-    { id:'MAT-007', name:'Pink Ribbon', unit:'roll', cost:25, stock:2, min:5 }
-  ];
   var products = [
-    { id:'heart', name:'Heart Bag', price:1200, labor:200, packaging:50, materials:[
-      { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', qty:100, cost:2 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-003', name:'Bag Handles', unit:'pcs', qty:2, cost:55 }
-    ] },
-    { id:'pink', name:'Pink Bag', price:850, labor:150, packaging:50, materials:[
-      { id:'MAT-001', name:'Pink Beads', unit:'pcs', qty:100, cost:2 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-006', name:'Clasps', unit:'pcs', qty:2, cost:30 }
-    ] },
-    { id:'pearl', name:'Pearl Tote', price:1500, labor:250, packaging:50, materials:[
-      { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', qty:100, cost:3 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-003', name:'Bag Handles', unit:'pcs', qty:2, cost:55 }
-    ] }
-  ];
-  var samples = [
-    { id:'ORD-001', customerId:'CUST-001', slipId:'SLP-001', customer:'Maria Santos', address:'Manila City', product:'Heart Bag', qty:1, unitPrice:1200, total:1200, date:'2026-10-28', dueDate:'2026-10-31', status:'Pending', delivery:'Pending', payment:'Fully Paid', deposit:1200, notes:'', labor:200, packaging:50, dpPolicy:50, materials:products[0].materials },
-    { id:'ORD-002', customerId:'CUST-002', slipId:'SLP-002', customer:'Ana Reyes', address:'Manila City', product:'Pink Bag', qty:1, unitPrice:850, total:850, date:'2026-10-28', dueDate:'2026-11-01', status:'In Progress', delivery:'Pending', payment:'Fully Paid', deposit:850, notes:'', labor:150, packaging:50, dpPolicy:50, materials:products[1].materials },
-    { id:'ORD-003', customerId:'CUST-003', slipId:'SLP-003', customer:'Camille Cruz', address:'Manila City', product:'Pearl Tote', qty:1, unitPrice:1500, total:1500, date:'2026-10-26', dueDate:'2026-10-30', status:'Completed', delivery:'Delivered', payment:'Fully Paid', deposit:1500, notes:'', labor:250, packaging:50, dpPolicy:50, materials:products[2].materials },
-    { id:'ORD-004', customerId:'CUST-004', slipId:'SLP-004', customer:'Isabel Garcia', address:'Manila City', product:'Heart Bag', qty:1, unitPrice:1200, total:1200, date:'2026-10-25', dueDate:'2026-10-31', status:'In Progress', delivery:'Pending', payment:'Fully Paid', deposit:1200, notes:'', labor:200, packaging:50, dpPolicy:50, materials:products[0].materials }
+    { id:'heart', name:'Heart Bag', price:1200, labor:200, packaging:50, materials:[] },
+    { id:'pink', name:'Pink Bag', price:850, labor:150, packaging:50, materials:[] },
+    { id:'pearl', name:'Pearl Tote', price:1500, labor:250, packaging:50, materials:[] }
   ];
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function loadStore() {
@@ -53,16 +26,40 @@
   function loadOrders() {
     if (!demo) return [];
     var stored = loadStore();
-    if (!Array.isArray(stored.orders)) return clone(samples);
-    return stored.orders.map(function (order) {
-      var sample = samples.find(function (item) { return item.id === order.id; });
-      return Object.assign({}, sample || {}, order);
-    });
+    return Array.isArray(stored.orders) ? stored.orders : [];
   }
   function loadMaterials() {
     if (!demo) return [];
     var stored = loadStore();
-    return Array.isArray(stored.materials) ? stored.materials : clone(materialsSeed);
+    return Array.isArray(stored.materials) ? stored.materials : [];
+  }
+  function loadProductCatalog() {
+    if (!demo) return;
+    var stored = loadStore();
+    if (!Array.isArray(stored.products)) return;
+    stored.products.forEach(function (product) {
+      if (!product || !product.name) return;
+      var materials = Array.isArray(product.materials) ? product.materials : [];
+      var labor = Number(product.labor) || 0;
+      var packaging = Number(product.packaging) || 0;
+      var materialCost = materials.reduce(function (sum, material) {
+        return sum + (Number(material.qty) || 0) * (Number(material.cost) || 0);
+      }, 0);
+      var price = (materialCost + labor + packaging) * (1 + (Number(product.markup) || 0) / 100);
+      var catalogProduct = {
+        id:'catalog-' + String(product.id),
+        name:String(product.name),
+        price:price,
+        labor:labor,
+        packaging:packaging,
+        materials:clone(materials)
+      };
+      var existingIndex = products.findIndex(function (existing) {
+        return existing.name.toLowerCase() === catalogProduct.name.toLowerCase();
+      });
+      if (existingIndex === -1) products.push(catalogProduct);
+      else products[existingIndex] = Object.assign({}, products[existingIndex], catalogProduct, {id:products[existingIndex].id});
+    });
   }
   function save() {
     if (!demo) return false;
@@ -129,13 +126,18 @@
   function orderId(number) { return 'ORD-' + String(number).padStart(3, '0'); }
   function cloneBom(items) { return clone(items || []); }
 
+  loadProductCatalog();
   var orders = loadOrders();
   var materials = loadMaterials();
   var activeGroup = 'all';
-  var activeOrderId = 'ORD-001';
+  var activeOrderId = '';
   var currentBom = [];
   var pendingMaterial = null;
   var detailOrder = null;
+
+  function refreshMaterials() {
+    materials = loadMaterials();
+  }
 
   function cardMarkup(order, index) {
     return '<article class="order-card' + (order.id === activeOrderId ? ' is-highlighted' : '') + '" data-view="' + esc(order.id) + '" tabindex="0" role="button" aria-label="View order ' + esc(order.id) + '">' +
@@ -158,9 +160,10 @@
         (!query || (order.id + ' ' + order.customer + ' ' + order.product).toLowerCase().includes(query));
     }).sort(function (a, b) { return a.id.localeCompare(b.id); });
 
-    $('ordTotal').textContent = demo ? 32 + Math.max(0, orders.length - samples.length) : orders.length;
-    $('ordProduction').textContent = demo ? Math.max(0, 8 + orders.filter(function (o) { return !o.archived && (o.status === 'Pending' || o.status === 'In Progress'); }).length - 3) :
-      orders.filter(function (o) { return !o.archived && (o.status === 'Pending' || o.status === 'In Progress'); }).length;
+    $('ordTotal').textContent = orders.length;
+    $('ordProduction').textContent = orders.filter(function (o) {
+      return !o.archived && (o.status === 'Pending' || o.status === 'In Progress');
+    }).length;
     $('ordRows').innerHTML = shown.map(function (order) {
       return '<tr data-view="' + esc(order.id) + '"><td>' + esc(order.id) + '</td><td>' + dateText(order.date) +
         '</td><td>' + esc(order.customer) + '</td><td>' + esc(order.product) + ' ×' + order.qty +
@@ -168,6 +171,9 @@
         '</td><td>' + badge(order.delivery || 'Pending') + '</td><td>' + badge(order.payment || 'Unpaid') + '</td></tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
+    $('ordEmpty').textContent = orders.length ?
+      'No orders match your search and filters.' : 'No orders yet. Create a new order to get started.';
+    $('ordAddMaterial').disabled = !demo;
     var currentOrders = orders.filter(function (order) {
       return !order.archived && (order.status === 'Pending' || order.status === 'In Progress');
     }).sort(function (a, b) { return a.date.localeCompare(b.date) || b.id.localeCompare(a.id); }).slice(0, 3);
@@ -209,16 +215,16 @@
   function resetCreateForm() {
     $('ordCreateForm').reset();
     $('ordId').value = orderId(nextOrderNumber());
-    $('ordCustomer').value = 'Elena Mendoza';
-    $('ordAddress').value = 'Manila City';
+    $('ordCustomer').value = '';
+    $('ordAddress').value = '';
     $('ordProduct').value = 'heart';
     $('ordQty').value = '1';
-    $('ordDueDate').value = 'Nov 1, 2026';
-    $('ordNotes').value = 'Gift wrap, please. Customer will pick up.';
-    $('ordLabor').value = '200';
-    $('ordPackaging').value = '50';
+    $('ordDueDate').value = '';
+    $('ordNotes').value = '';
+    $('ordLabor').value = '0';
+    $('ordPackaging').value = '0';
     $('ordDpPolicy').value = '50';
-    currentBom = cloneBom(products[0].materials);
+    currentBom = [];
     $('ordCreateError').hidden = true;
     renderBom();
   }
@@ -321,7 +327,13 @@
     openModal('ordCreateModal');
   });
   document.querySelectorAll('[data-focus]').forEach(function (button) {
-    button.addEventListener('click', function () { $(button.dataset.focus).focus(); });
+    button.addEventListener('click', function () {
+      var field = $(button.dataset.focus);
+      field.focus();
+      if (field.tagName === 'SELECT' && typeof field.showPicker === 'function') {
+        try { field.showPicker(); } catch (error) {}
+      }
+    });
   });
   $('ordProduct').addEventListener('change', function () {
     var product = selectedProduct();
@@ -341,18 +353,17 @@
   });
   $('ordAddMaterial').addEventListener('click', function () {
     if (!demo) return;
+    refreshMaterials();
     var number = $('ordId').value;
     $('ordMaterialContext').textContent = 'Adding to ' + number + ' · ' + selectedProduct().name;
     renderMaterialOptions();
-    var pearl = materials.find(function (material) { return material.id === 'MAT-005'; });
-    $('ordMaterialSelect').value = pearl ? pearl.id : materials[0] ? materials[0].id : '';
-    $('ordMaterialQty').value = pearl ? '400' : '1';
+    $('ordMaterialSelect').value = materials[0] ? materials[0].id : '';
+    $('ordMaterialQty').value = '1';
     updateMaterialDialog();
     openModal('ordMaterialModal');
   });
   $('ordMaterialSelect').addEventListener('change', function () {
-    var material = selectedMaterial();
-    $('ordMaterialQty').value = material && material.id === 'MAT-005' ? '400' : '1';
+    $('ordMaterialQty').value = '1';
     updateMaterialDialog();
   });
   $('ordMaterialQty').addEventListener('input', updateMaterialDialog);
@@ -372,13 +383,11 @@
     var number = nextOrderNumber();
     var unitPrice = Number(product.price);
     var total = unitPrice * qty;
-    var deposit = total * Math.max(0, Math.min(100, Number($('ordDpPolicy').value) || 0)) / 100;
     orders.push({
       id:orderId(number), customerId:'CUST-' + String(number).padStart(3,'0'), slipId:'SLP-' + String(number).padStart(3,'0'),
       customer:customer, address:address, product:product.name, qty:qty, unitPrice:unitPrice, total:total,
       date:dateValue(new Date()), dueDate:dueDate, status:'Pending', delivery:'Pending',
-      payment:deposit <= 0 ? 'Unpaid' : deposit >= total ? 'Fully Paid' : 'Partial',
-      deposit:deposit, notes:$('ordNotes').value.trim(), labor:Number($('ordLabor').value) || 0,
+      payment:'Unpaid', deposit:0, notes:$('ordNotes').value.trim(), labor:Number($('ordLabor').value) || 0,
       packaging:Number($('ordPackaging').value) || 0, dpPolicy:Number($('ordDpPolicy').value) || 0,
       materials:cloneBom(currentBom)
     });

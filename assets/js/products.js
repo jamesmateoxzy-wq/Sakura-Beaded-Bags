@@ -14,8 +14,8 @@
   var inventory  = window.SAKURA_MATERIALS  || [];
   var categories = window.SAKURA_CATEGORIES || [];
   var IMG_PATH = '../assets/images/products/';
-
-  var selectedId = products.length ? products[0].id : null;
+  var inventoryKey = 'sakura-operations-v1';
+  var selectedId;
   var draft = null;       // the copy being edited in the costing sheet
   var newDraft = null;    // the product being built in the Add Product modal
   var amOnAdd = null;     // what to do when "Add" is pressed in the Add Material modal
@@ -27,6 +27,31 @@
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(n) { return Math.round(n * 100) % 100 === 0 ? S.peso(n, 0) : S.peso(n, 2); }
   function findProduct(id) { return products.filter(function (p) { return p.id === id; })[0]; }
+  function loadSavedProducts() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (stored && Array.isArray(stored.products)) products = stored.products;
+    } catch (error) {
+      S.toast('Could not load saved products from this browser session.');
+    }
+  }
+  function saveProducts() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+        S.toast('Could not save products: browser session data is invalid.');
+        return false;
+      }
+      stored.products = products;
+      sessionStorage.setItem(inventoryKey, JSON.stringify(stored));
+      return true;
+    } catch (error) {
+      S.toast('Could not save products in this browser session.');
+      return false;
+    }
+  }
+  loadSavedProducts();
+  selectedId = products.length ? products[0].id : null;
 
   function calc(p) {
     var mat = p.materials.reduce(function (s, m) { return s + m.qty * m.cost; }, 0);
@@ -178,7 +203,12 @@
     if (!draft.name.trim()) { $('sName').classList.add('is-error'); S.toast('Enter a product name first.'); return; }
     $('sName').classList.remove('is-error');
     var i = products.indexOf(findProduct(selectedId));
+    var previous = products[i];
     products[i] = clone(draft);
+    if (!saveProducts()) {
+      products[i] = previous;
+      return;
+    }
     renderList();
     renderSheet();
     S.toast('Pricing saved for ' + draft.name);
@@ -196,6 +226,15 @@
   // ---------- Add Material modal ----------
   function inv() { return inventory[$('amMaterial').selectedIndex] || inventory[0]; }
 
+  function refreshInventory() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (stored && Array.isArray(stored.materials)) inventory = stored.materials;
+    } catch (error) {
+      S.toast('Could not load inventory materials from this browser session.');
+    }
+  }
+
   function updateAmount() {
     var m = inv(), qty = num($('amQty').value), cost = num($('amCost').value);
     $('amAmount').textContent = S.peso(qty * cost);
@@ -209,6 +248,7 @@
 
   function openAddMaterial(context, onAdd) {
     amOnAdd = onAdd;
+    refreshInventory();
     $('amContext').textContent = context;
     $('amMaterial').innerHTML = inventory.map(function (m) {
       return '<option>' + esc(m.name) + ' · ' + m.stock + ' ' + esc(m.unit) + ' available</option>';
@@ -298,6 +338,10 @@
     var item = clone(newDraft);
     item.id = next;
     products.push(item);
+    if (!saveProducts()) {
+      products.pop();
+      return;
+    }
     $('categoryFilter').value = 'all';
     $('productSearch').value = '';
     S.closeModal('addProductModal');

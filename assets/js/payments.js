@@ -43,6 +43,13 @@
     var d = new Date();
     return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
   }
+  function validLocalDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    var parts = value.split('-').map(Number);
+    var date = new Date(parts[0], parts[1] - 1, parts[2]);
+    return date.getFullYear() === parts[0] && date.getMonth() === parts[1] - 1 &&
+      date.getDate() === parts[2];
+  }
   function orderFor(id) {
     return orders.filter(function (o) { return o.id === id; })[0] || null;
   }
@@ -58,6 +65,42 @@
   }
   function notice(message) {
     if (window.Sakura && Sakura.toast) Sakura.toast(message);
+  }
+
+  function loadDemoOrders() {
+    if (!demo) return;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem('sakura-operations-v1') || '{}');
+      if (!stored || !Array.isArray(stored.orders)) return;
+      orders = stored.orders.filter(function (order) {
+        return order && typeof order.id === 'string' && /^ORD-\d+$/.test(order.id) &&
+          typeof order.customer === 'string' && Number.isFinite(Number(order.total)) &&
+          Number(order.total) >= 0;
+      });
+    } catch (error) {
+      notice('Could not read orders from this browser session.');
+    }
+  }
+
+  function syncOrderPayment(orderId, persist) {
+    var order = orderFor(orderId);
+    if (!order) return;
+    var paid = paidCents(orderId);
+    var total = cents(order.total);
+    order.payment = paid >= total && total > 0 ? 'Fully Paid' : paid > 0 ? 'Partial' : 'Unpaid';
+    order.deposit = toPesos(paid);
+    if (!persist) return;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem('sakura-operations-v1') || '{}');
+      if (!stored || !Array.isArray(stored.orders)) return;
+      var storedOrder = stored.orders.find(function (item) { return item.id === orderId; });
+      if (!storedOrder) return;
+      storedOrder.payment = order.payment;
+      storedOrder.deposit = order.deposit;
+      sessionStorage.setItem('sakura-operations-v1', JSON.stringify(stored));
+    } catch (error) {
+      notice('Payment saved, but the order payment status could not be updated.');
+    }
   }
 
   // Validate restored demo data so altered/stale browser storage cannot be
@@ -96,7 +139,8 @@
   }
 
   function renderSummary() {
-    var sales = orders.reduce(function (sum, o) { return sum + cents(o.total); }, 0);
+    var sales = orders.filter(function (order) { return order.status !== 'Cancelled'; })
+      .reduce(function (sum, o) { return sum + cents(o.total); }, 0);
     var received = payments.reduce(function (sum, p) { return sum + cents(p.amount); }, 0);
     var outstanding = Math.max(0, sales - received);
     $('totalSales').textContent = peso(toPesos(sales));
@@ -145,6 +189,8 @@
         '</tr>';
     }).join('');
     $('paymentEmpty').hidden = filtered.length !== 0;
+    $('paymentEmpty').textContent = payments.length ?
+      'No transactions match your search or filters.' : 'No payment records yet.';
     $('paymentCount').textContent = filtered.length
       ? 'Showing ' + (from + 1) + '–' + Math.min(from + pageSize, filtered.length) +
         ' of ' + filtered.length + ' payments · All amounts in PHP'
@@ -174,7 +220,9 @@
     var select = $('paymentOrder');
     var previous = select.value;
     select.innerHTML = '';
-    var available = orders.filter(function (o) { return balanceCents(o) > 0; });
+    var available = orders.filter(function (o) {
+      return o.status !== 'Cancelled' && balanceCents(o) > 0;
+    });
     var placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = available.length ? 'Select unpaid order' : 'No unpaid orders available';
@@ -269,8 +317,7 @@
     if (!['Cash', 'GCash', 'Bank Transfer'].includes(method)) {
       return { error: 'Choose a valid payment method.' };
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00').getTime()) ||
-        new Date(date + 'T00:00:00').toISOString().slice(0, 10) !== date || date > todayLocal()) {
+    if (!validLocalDate(date) || date > todayLocal()) {
       return { error: 'Choose a valid payment date that is not in the future.' };
     }
     if (method !== 'Cash' && !ref) return { error: 'Enter the GCash or bank reference number.' };
@@ -318,6 +365,7 @@
       } catch (storageError) {
         stored = false;
       }
+      syncOrderPayment(entry.orderId, stored);
       $('recordPaymentForm').reset();
       $('paymentDate').value = todayLocal();
       $('paymentMethod').value = 'GCash';
@@ -342,6 +390,7 @@
       seed = [];
       payments = [];
     } else {
+      loadDemoOrders();
       loadDemoPayments();
     }
     $('paymentDate').max = todayLocal();

@@ -73,8 +73,7 @@ require_once __DIR__ . '/../includes/header.php';
   <h2 class="section-title">Your boutique at a glance</h2>
   <form method="get" id="monthForm" class="month-picker">
     <?= icon('calendar') ?>
-    <label class="sr-only" for="monthInput">Choose month</label>
-    <input type="month" id="monthInput" name="month" value="<?= e($month) ?>">
+    <input type="month" id="monthInput" name="month" value="<?= e($month) ?>" aria-label="Choose month">
   </form>
 </div>
 

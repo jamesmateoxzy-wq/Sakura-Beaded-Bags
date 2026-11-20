@@ -19,30 +19,8 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 
-// These are fictitious test orders, not customer/business records.
-// TODO (backend): replace with SELECT from orders (id, customer, total, item).
-$sampleOrders = [
-    ['id' => 'ORD-001', 'customer' => 'Maria Santos',   'item' => 'Pearl Heart Bag',    'total' => 1200],
-    ['id' => 'ORD-002', 'customer' => 'Ana Reyes',      'item' => 'Sakura Mini Pouch',  'total' => 850],
-    ['id' => 'ORD-003', 'customer' => 'Camille Cruz',   'item' => 'Classic Tote',       'total' => 1500],
-    ['id' => 'ORD-004', 'customer' => 'Isabel Garcia',  'item' => 'Petal Handbag',      'total' => 1200],
-    ['id' => 'ORD-005', 'customer' => 'Sofia Ramos',    'item' => 'Beaded Phone Bag',   'total' => 800],
-    ['id' => 'ORD-006', 'customer' => 'Louise Santos',  'item' => 'Daisy Set',          'total' => 1800],
-    ['id' => 'ORD-007', 'customer' => 'Michelle Cruz',  'item' => 'Pink Ribbon Bag',    'total' => 975],
-];
-
-// TODO (backend): replace with SELECT from payments; use stored order totals
-// and SUM(payment.amount) per order when computing balances.
-$samplePayments = [
-    ['id' => 'SLP-001', 'orderId' => 'ORD-001', 'amount' => 1200, 'method' => 'GCash',         'date' => '2026-10-28', 'reference' => 'GC-1028-001', 'balanceAfter' => 0],
-    ['id' => 'SLP-002', 'orderId' => 'ORD-002', 'amount' => 850,  'method' => 'GCash',         'date' => '2026-10-28', 'reference' => 'GC-1028-002', 'balanceAfter' => 0],
-    ['id' => 'SLP-003', 'orderId' => 'ORD-003', 'amount' => 1500, 'method' => 'Bank Transfer', 'date' => '2026-10-26', 'reference' => 'BANK-1026-03', 'balanceAfter' => 0],
-    ['id' => 'SLP-004', 'orderId' => 'ORD-004', 'amount' => 600,  'method' => 'Cash',          'date' => '2026-10-25', 'reference' => 'CASH-1025-04', 'balanceAfter' => 600],
-    ['id' => 'SLP-005', 'orderId' => 'ORD-005', 'amount' => 200,  'method' => 'GCash',         'date' => '2026-10-25', 'reference' => 'GC-1025-005', 'balanceAfter' => 600],
-];
-
-$orders = $isDemo ? $sampleOrders : [];
-$payments = $isDemo ? $samplePayments : [];
+$orders = [];
+$payments = [];
 
 $pageTitle = 'Payments & Sales';
 $pageSubtitle = 'A clear view of every payment and outstanding balance.';

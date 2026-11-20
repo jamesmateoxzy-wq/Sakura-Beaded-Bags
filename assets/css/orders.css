@@ -1,23 +1,6 @@
-/* Order Management reference layout */
-.orders-layout .app{grid-template-columns:186px minmax(0,1fr)}
-.orders-layout .sidebar{padding:24px 15px 10px}
-.orders-layout .brand{margin-bottom:34px}
-.orders-layout .brand img{width:82px}
-.orders-layout .nav{gap:5px}
-.orders-layout .nav a{gap:8px;padding:10px;border-radius:8px;font-size:10px;white-space:nowrap}
-.orders-layout .nav .icon{width:13px;height:13px}
-.orders-layout .sidebar-foot{padding:0 6px;font-size:9px;line-height:1.4}
-.orders-layout .sidebar-foot strong{font-size:9px;line-height:1.4}
-.orders-layout .topbar{height:68px;padding:10px 20px;gap:10px}
-.orders-layout .topbar-title h1{font-size:19px}
-.orders-layout .topbar-title p{font-size:9px}
-.orders-layout .avatar{width:30px;height:30px;font-size:9px}
-.orders-layout .profile-btn{gap:8px;padding:2px 0}
-.orders-layout .profile-text strong{font-size:9px}
-.orders-layout .profile-text small{font-size:8px}
-.orders-layout .profile-btn .icon{width:10px;height:10px}
+/* Order Management */
 .orders-layout .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-.orders-layout .content{padding:20px 0 28px;background:#fff8f4}
+.orders-layout .content{padding:24px 28px 40px;background:#fff8f4}
 .ops-page{display:flex;flex-direction:column;gap:18px;min-width:0}
 .orders-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-left:20px}
 .orders-tabs{display:flex;align-items:center;gap:8px}
@@ -180,6 +163,124 @@
   .orders-layout .order-field-notes{grid-column:1/3}
   .orders-layout .order-total-summary{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
-@media(max-width:960px){.orders-layout .app{grid-template-columns:1fr}.orders-layout .sidebar{padding:24px 15px 10px}.orders-layout .sidebar .brand img{width:82px}.orders-layout .nav a{font-size:13px;padding:14px 16px}.orders-layout .sidebar-foot,.orders-layout .sidebar-foot strong{font-size:11px}}
+@media(max-width:960px){.orders-layout .app{grid-template-columns:1fr}}
 @media(max-width:700px){.orders-cards{grid-template-columns:repeat(2,minmax(0,1fr));padding-right:14px}.orders-current{padding-left:14px}.orders-toolbar{padding-left:14px}.orders-list{margin-right:14px;margin-left:14px}.orders-layout .content{padding-top:16px}}
 @media(max-width:520px){.orders-cards{grid-template-columns:1fr}.orders-toolbar{align-items:flex-start;flex-wrap:wrap;padding-right:14px}.orders-tabs{gap:5px}.orders-tab{font-size:8px}.orders-new{margin-left:auto}.orders-filters{align-items:stretch}.orders-search{width:auto;flex:1}.orders-status-filter .select{min-width:72px}.form-row{grid-template-columns:1fr}.modal-overlay{padding:0;align-items:flex-end}.modal{max-width:none;border-radius:20px 20px 0 0}}
+
+/* Readable order-management layout and controls. */
+.orders-layout .ops-page{max-width:1560px;margin:0 auto;gap:22px}
+.orders-toolbar{justify-content:space-between;gap:16px;padding:0;flex-wrap:wrap}
+.orders-tabs{gap:8px;flex-wrap:wrap}
+.orders-tab{gap:6px;min-height:40px;padding:8px 13px;border-radius:9px;font-size:13px}
+.orders-new{height:44px;padding:0 16px;border-radius:9px;font-size:14px}
+.orders-new .icon{width:18px;height:18px}
+.orders-current{padding:0}
+.orders-current-heading{margin-bottom:14px}
+.orders-current-heading h2{font-size:18px}
+.orders-current-heading p{margin-top:4px;font-size:13px}
+.orders-cards{grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.order-card{min-height:190px;padding:16px;border-radius:14px}
+.order-card-top{gap:8px;margin-bottom:8px;font-size:12px}
+.order-card h3{margin-bottom:6px;font-size:15px}
+.order-card-product{gap:10px;font-size:13px}
+.order-card-product strong{font-size:13px}
+.order-card-due{margin-top:10px;font-size:12px}
+.order-card-badges{gap:8px;margin-top:12px}
+.order-card-link{padding-top:12px;font-size:12px}
+.orders-layout .badge{min-width:0;padding:4px 10px;font-size:11px}
+.orders-list{margin:0;padding:20px;border-radius:14px}
+.orders-filters{gap:12px;margin-bottom:14px}
+.orders-search{width:280px;height:42px}
+.orders-search .icon{left:12px;width:17px;height:17px}
+.orders-search input{height:42px;padding:0 12px 0 38px;border-radius:9px;font-size:13px}
+.orders-status-filter:before{left:14px;top:17px;width:6px;height:6px}
+.orders-status-filter .select{min-width:150px;height:42px;padding:0 12px 0 34px;border-radius:9px;font-size:13px}
+.orders-table{min-width:900px;font-size:13px}
+.orders-table th{height:42px;padding:9px 12px;font-size:12px}
+.orders-table td{height:48px;padding:9px 12px;font-size:13px}
+.orders-table .badge{min-width:0;padding:4px 9px;font-size:11px}
+.ops-empty{padding:26px 12px;font-size:14px}
+.orders-layout .order-create-modal{max-width:760px;height:min(680px,calc(100vh - 40px))}
+.orders-layout .order-material-modal{max-width:520px;height:auto;min-height:430px}
+.orders-layout .order-detail-modal{max-width:620px;height:auto;min-height:470px}
+.orders-layout .order-dialog-head{gap:14px;padding:20px 24px 8px}
+.orders-layout .order-dialog-head h2{font-size:20px}
+.orders-layout .order-dialog-head p{font-size:13px}
+.orders-layout .order-dialog-head .icon{width:18px;height:18px}
+.orders-layout .order-create-body,.orders-layout .order-material-body,.orders-layout .order-detail-body{padding:16px 24px}
+.orders-layout .order-create-grid{gap:12px}
+.orders-layout .order-create-top{margin-bottom:12px}
+.orders-layout .order-create-middle{grid-template-columns:minmax(0,1.5fr) minmax(90px,.55fr) minmax(0,1fr)}
+.orders-layout .order-field{gap:5px}
+.orders-layout .order-field label{font-size:12px}
+.orders-layout .order-field .input,.orders-layout .order-field .select,
+.orders-layout .order-field .textarea{height:42px;min-height:42px;padding:8px 10px;border-radius:8px;font-size:13px}
+.orders-layout .order-field .textarea{height:64px;min-height:64px}
+.orders-layout .mini-edit{width:26px;height:26px}
+.orders-layout .mini-edit .icon{width:14px;height:14px}
+.orders-layout .order-bom-head{margin:20px 0 10px}
+.orders-layout .order-bom-head h3{font-size:15px}
+.orders-layout .order-add-material{height:36px;padding:0 12px;border-radius:8px;font-size:12px}
+.orders-layout .order-add-material .icon{width:15px;height:15px}
+.orders-layout .order-bom-table{min-width:480px;font-size:12px}
+.orders-layout .order-bom-table th{height:36px;padding:8px 10px;font-size:11px}
+.orders-layout .order-bom-table td{height:40px;padding:7px 10px;font-size:12px}
+.orders-layout .order-remove-material{font-size:18px}
+.orders-layout .order-cost-inputs{gap:12px;margin-top:18px}
+.orders-layout .order-percent span{right:10px;font-size:12px}
+.orders-layout .order-total-summary{gap:10px;margin-top:14px;padding:14px;border-radius:10px}
+.orders-layout .order-total-summary small{font-size:11px}
+.orders-layout .order-total-summary strong{font-size:16px}
+.orders-layout .order-total-summary div small:last-child:not(:first-child){font-size:10px}
+.orders-layout .order-create-body .ops-error,.orders-layout .order-material-body .ops-error{margin-top:8px;font-size:12px}
+.orders-layout .order-dialog-foot{padding:14px 24px 18px}
+.orders-layout .order-dialog-foot>span{font-size:12px}
+.orders-layout .order-dialog-foot>div{gap:10px}
+.orders-layout .order-dialog-foot .btn{min-height:40px;padding:8px 16px;border-radius:8px;font-size:13px}
+.orders-layout .order-dialog-foot .btn-primary{min-width:120px}
+.orders-layout .order-material-body>.order-field{margin-bottom:14px}
+.orders-layout .order-material-body>.order-field .select{height:42px}
+.orders-layout .order-material-meta{font-size:12px}
+.orders-layout .order-material-grid{gap:12px}
+.orders-layout .order-material-amount{margin-top:16px;padding:14px;border-radius:9px}
+.orders-layout .order-material-amount>small{font-size:12px}
+.orders-layout .order-material-amount strong{font-size:20px}
+.orders-layout .order-material-amount span{font-size:12px}
+.orders-layout .order-stock-warning{gap:6px;margin-top:14px;padding:12px;font-size:12px}
+.orders-layout .order-stock-warning strong{font-size:13px}
+.orders-layout .order-detail-code{margin-top:5px!important;font-size:12px!important}
+.orders-layout .order-customer-block{margin:8px 0 18px}
+.orders-layout .order-customer-block h3{font-size:17px}
+.orders-layout .order-customer-block p{font-size:13px}
+.orders-layout .order-detail-dates{gap:16px;margin-bottom:20px}
+.orders-layout .order-detail-dates div{gap:5px}
+.orders-layout .order-detail-dates small{font-size:12px}
+.orders-layout .order-detail-dates strong{font-size:13px}
+.orders-layout .order-detail-item{padding:18px 14px;border-radius:10px}
+.orders-layout .order-detail-product{font-size:13px}
+.orders-layout .order-detail-status{margin-top:16px}
+.orders-layout .order-detail-status .badge{min-width:0;font-size:11px}
+.orders-layout .order-view-bom{font-size:12px}
+.orders-layout .order-detail-bom{margin-top:12px;padding-top:10px}
+.orders-layout .order-detail-bom ul{gap:8px;font-size:12px}
+.orders-layout .order-detail-total{margin-top:18px;font-size:13px}
+.orders-layout .order-detail-total strong{font-size:20px}
+.orders-layout .order-detail-body>.badge{min-width:0;font-size:11px}
+.orders-layout .order-detail-foot{padding-top:16px}
+.orders-layout .order-detail-foot .btn{min-height:40px;font-size:13px}
+@media(max-width:700px){
+  .orders-layout .content{padding:18px 16px 30px}
+  .orders-current{padding:0}
+  .orders-toolbar{padding:0}
+  .orders-list{margin:0;padding:16px}
+}
+@media(max-width:520px){
+  .orders-toolbar{align-items:stretch;padding:0}
+  .orders-tabs{width:100%;gap:6px}
+  .orders-tab{font-size:12px}
+  .orders-new{align-self:flex-end;margin-left:0}
+  .orders-filters{align-items:stretch}
+  .orders-search{width:auto;flex:1}
+  .orders-status-filter .select{min-width:150px}
+  .orders-layout .order-dialog-head,.orders-layout .order-dialog-foot{padding-right:16px;padding-left:16px}
+}

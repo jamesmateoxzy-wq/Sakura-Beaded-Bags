@@ -42,7 +42,7 @@ require_once __DIR__ . '/../includes/header.php';
     <article class="card rep-stat">
       <div><span>Revenue</span><?= icon('wallet') ?></div>
       <strong id="repRevenue">₱0</strong>
-      <small id="repRevenueNote">+14.0% vs September</small>
+      <small id="repRevenueNote">No revenue recorded</small>
     </article>
     <article class="card rep-stat">
       <div><span>Expenses</span><?= icon('payments') ?></div>
@@ -52,7 +52,7 @@ require_once __DIR__ . '/../includes/header.php';
     <article class="card rep-stat">
       <div><span>Net Profit</span><?= icon('reports') ?></div>
       <strong id="repProfit">₱0</strong>
-      <small id="repProfitNote">42.0% net profit margin</small>
+      <small id="repProfitNote">0.0% net profit margin</small>
     </article>
     <article class="card rep-stat">
       <div><span>Orders</span><?= icon('orders') ?></div>
@@ -63,8 +63,8 @@ require_once __DIR__ . '/../includes/header.php';
   <div class="rep-chart-grid">
     <section class="card rep-chart-card">
       <div class="rep-chart-heading">
-        <div><h2 id="repSalesTitle">Monthly Sales</h2><p id="repSalesSubtitle">May–October 2026 · Order revenue</p></div>
-        <strong id="repSalesTrend">+14.0%</strong>
+        <div><h2 id="repSalesTitle">Monthly Sales</h2><p id="repSalesSubtitle">No sales recorded</p></div>
+        <strong id="repSalesTrend">No trend yet</strong>
       </div>
       <div class="rep-chart" id="repBars" role="img" aria-label="Monthly sales chart"></div>
       <p class="rep-empty" id="repChartEmpty" hidden>No sales in this period.</p>
@@ -76,24 +76,26 @@ require_once __DIR__ . '/../includes/header.php';
         </div></div>
       </div>
       <div class="rep-chart" id="repComparison" role="img" aria-label="Monthly revenue and expenses chart"></div>
+      <p class="rep-empty" id="repComparisonEmpty" hidden>No revenue or expenses recorded.</p>
     </section>
   </div>
   <div class="rep-analysis-grid">
     <section class="card rep-analysis-card">
-      <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle">October 2026 · Revenue less recorded expenses</p></div>
+      <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle">No financial activity recorded.</p></div>
       <table class="rep-analysis-table">
         <thead><tr><th>Category</th><th>Amount</th><th>Share of revenue</th></tr></thead>
         <tbody id="repExpensesTable"></tbody>
       </table>
+      <p class="rep-empty" id="repExpensesEmpty" hidden>No expense records for this period.</p>
       <div class="rep-net-profit"><strong>Net Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
     </section>
     <section class="card rep-glance-card">
-      <h2 id="repGlanceTitle">October at a glance</h2>
-      <div class="rep-margin-row"><span>Net profit margin</span><strong id="repMargin">42.0%</strong></div>
+      <h2 id="repGlanceTitle">No activity yet</h2>
+      <div class="rep-margin-row"><span>Net profit margin</span><strong id="repMargin">0.0%</strong></div>
       <div class="rep-margin-track"><span id="repMarginBar"></span></div>
-      <p id="repGlanceText">Revenue grew by ₱3,000 from September, while net profit increased by ₱1,800.</p>
-      <small id="repCalculation">Revenue: ₱24,500 - Expenses: ₱14,200</small>
-      <small id="repPrepared">Prepared October 28, 2026 · Currency: PHP (₱)</small>
+      <p id="repGlanceText">No sales or expenses recorded for this period.</p>
+      <small id="repCalculation">Revenue: ₱0 - Expenses: ₱0</small>
+      <small id="repPrepared">No report data yet · Currency: PHP (₱)</small>
     </section>
   </div>
 </section>
