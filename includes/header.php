@@ -7,6 +7,7 @@
  *   $pageSubtitle - small text under the title
  *   $activePage   - which sidebar item is highlighted (see $nav keys)
  *   $pageCss      - optional extra stylesheet file name (e.g. 'dashboard.css')
+ *   $pageBodyClass - optional page-specific body class
  *
  * Always close the page with includes/footer.php
  */
@@ -21,6 +22,7 @@ $pageTitle    = $pageTitle    ?? 'Sakura Beaded Bags';
 $pageSubtitle = $pageSubtitle ?? '';
 $activePage   = $activePage   ?? '';
 $pageCss      = $pageCss      ?? '';
+$pageBodyClass = $pageBodyClass ?? '';
 
 $userName = $_SESSION['user_name'] ?? 'Sakura Admin';
 $userRole = $_SESSION['user_role'] ?? 'Admin';
@@ -50,7 +52,7 @@ $nav = [
   <?php if ($pageCss): ?><link rel="stylesheet" href="../assets/css/<?= e($pageCss) ?>"><?php endif; ?>
     <link rel="stylesheet" href="../assets/css/responsive.css">
 </head>
-<body>
+<body<?= $pageBodyClass ? ' class="' . e($pageBodyClass) . '"' : '' ?>>
 <div class="app">
 
   <!-- ===== Sidebar ===== -->
