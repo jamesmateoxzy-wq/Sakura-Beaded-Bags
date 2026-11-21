@@ -1,23 +1,6 @@
-/* Financial Reports reference layout */
-.reports-layout .app{grid-template-columns:190px minmax(0,1fr)}
-.reports-layout .sidebar{padding:24px 12px 10px}
-.reports-layout .brand{margin-bottom:34px}
-.reports-layout .brand img{width:82px}
-.reports-layout .nav{gap:5px}
-.reports-layout .nav a{gap:8px;padding:10px;border-radius:8px;font-size:10px;white-space:nowrap}
-.reports-layout .nav .icon{width:13px;height:13px}
-.reports-layout .sidebar-foot{padding:0 6px;font-size:9px;line-height:1.4}
-.reports-layout .sidebar-foot strong{font-size:9px;line-height:1.4}
-.reports-layout .topbar{height:72px;padding:10px 22px;gap:10px}
-.reports-layout .topbar-title h1{font-size:19px}
-.reports-layout .topbar-title p{font-size:9px}
-.reports-layout .avatar{width:30px;height:30px;font-size:9px}
-.reports-layout .profile-btn{gap:8px;padding:2px 0}
-.reports-layout .profile-text strong{font-size:9px}
-.reports-layout .profile-text small{font-size:8px}
-.reports-layout .profile-btn .icon{width:10px;height:10px}
-.reports-layout .content{padding:21px 16px 16px 22px;background:#fff8f4}
-.reports-layout .ops-page{display:flex;min-width:0;flex-direction:column;gap:14px}
+/* Financial Reports */
+.reports-layout .content{padding:24px 28px 40px;background:#fff8f4}
+.reports-layout .ops-page{display:flex;max-width:1560px;margin:0 auto;min-width:0;flex-direction:column;gap:22px}
 .reports-layout .rep-toolbar{display:flex;min-height:29px;align-items:center;justify-content:space-between;gap:12px}
 .reports-layout .rep-filters,.reports-layout .rep-actions{display:flex;align-items:center;gap:8px}
 .reports-layout .rep-period-control,.reports-layout .rep-granularity-control{position:relative;display:flex;height:29px;align-items:center}
@@ -91,13 +74,7 @@
 @media(max-width:1100px){
   .reports-layout .rep-stats{gap:18px}
 }
-@media(max-width:960px){
-  .reports-layout .app{grid-template-columns:1fr}
-  .reports-layout .sidebar{padding:24px 15px 10px}
-  .reports-layout .sidebar .brand img{width:82px}
-  .reports-layout .nav a{padding:14px 16px;font-size:13px}
-  .reports-layout .sidebar-foot,.reports-layout .sidebar-foot strong{font-size:11px}
-}
+@media(max-width:960px){.reports-layout .app{grid-template-columns:1fr}}
 @media(max-width:760px){
   .reports-layout .rep-chart-grid,.reports-layout .rep-analysis-grid{grid-template-columns:1fr}
   .reports-layout .rep-chart-card{height:190px}
@@ -118,4 +95,78 @@
   .reports-layout .content{padding:0;background:#fff}
   .reports-layout .rep-chart-grid,.reports-layout .rep-analysis-grid{grid-template-columns:1fr 1fr}
   .reports-layout .rep-stat,.reports-layout .rep-chart-card,.reports-layout .rep-analysis-card,.reports-layout .rep-glance-card{break-inside:avoid;border:1px solid #ddd}
+}
+
+/* Use readable type and roomier cards while keeping report content bounded. */
+.reports-layout .rep-toolbar{min-height:44px}
+.reports-layout .rep-filters,.reports-layout .rep-actions{gap:10px}
+.reports-layout .rep-period-control,.reports-layout .rep-granularity-control{height:42px}
+.reports-layout .rep-period-control{width:190px}
+.reports-layout .rep-granularity-control{width:130px}
+.reports-layout .rep-period-control>.icon,.reports-layout .rep-granularity-control>.icon{width:16px;height:16px}
+.reports-layout .rep-granularity-control>.icon{right:10px}
+.reports-layout .rep-period-control select,.reports-layout .rep-granularity-control select{height:42px;padding-top:0;padding-bottom:0;border-radius:9px;font-size:13px}
+.reports-layout .rep-period-control select{padding-left:34px}
+.reports-layout .rep-granularity-control select{padding-right:30px}
+.reports-layout .rep-actions .btn{height:42px;gap:8px;padding:0 14px;border-radius:9px;font-size:13px}
+.reports-layout .rep-actions .icon{width:16px;height:16px}
+.reports-layout .rep-export-pdf{min-width:120px}
+.reports-layout .rep-stats{gap:16px}
+.reports-layout .rep-stat{height:auto;min-height:116px;gap:6px;padding:18px}
+.reports-layout .rep-stat>div{gap:10px;font-size:13px}
+.reports-layout .rep-stat>div .icon{width:18px;height:18px}
+.reports-layout .rep-stat>strong{font-size:clamp(22px,2vw,28px)}
+.reports-layout .rep-stat>small{font-size:12px;white-space:normal}
+.reports-layout .rep-chart-grid{gap:18px}
+.reports-layout .rep-chart-card{height:300px;padding:18px}
+.reports-layout .rep-chart-heading{min-height:58px;gap:12px}
+.reports-layout .rep-chart-heading h2{font-size:17px}
+.reports-layout .rep-chart-heading p{font-size:12px}
+.reports-layout .rep-chart-heading>strong{margin-top:0;font-size:13px}
+.reports-layout .rep-comparison-heading{min-height:58px}
+.reports-layout .rep-legend{gap:14px;margin-top:8px;font-size:12px}
+.reports-layout .rep-legend i{width:10px;height:10px}
+.reports-layout .rep-chart{height:196px;grid-template-columns:44px minmax(0,1fr);gap:10px}
+.reports-layout .rep-chart[hidden]{display:none}
+.reports-layout .rep-chart-axis{height:166px;font-size:11px}
+.reports-layout .rep-chart-plot{overflow-x:auto}
+.reports-layout .rep-chart-column{min-width:34px}
+.reports-layout .rep-sales-track{width:30px;height:148px;flex-basis:148px}
+.reports-layout .rep-sales-bar{width:30px}
+.reports-layout .rep-compare-track{width:42px;height:148px;flex-basis:148px;gap:5px}
+.reports-layout .rep-compare-bar{width:17px}
+.reports-layout .rep-chart-label{height:22px;padding-top:7px;font-size:11px}
+.reports-layout .rep-empty{padding:24px;color:var(--muted);text-align:center;font-size:14px}
+.reports-layout .rep-analysis-grid{grid-template-columns:minmax(0,1.4fr) minmax(280px,1fr);gap:18px}
+.reports-layout .rep-analysis-card,.reports-layout .rep-glance-card{height:auto;min-height:230px;padding:20px}
+.reports-layout .rep-analysis-heading h2,.reports-layout .rep-glance-card h2{font-size:17px}
+.reports-layout .rep-analysis-heading p{font-size:12px}
+.reports-layout .rep-analysis-table{margin-top:12px;font-size:13px}
+.reports-layout .rep-analysis-table th{height:40px;padding:9px 10px;font-size:12px}
+.reports-layout .rep-analysis-table td{height:40px;padding:8px 10px;font-size:13px}
+.reports-layout .rep-net-profit{gap:12px;margin-top:12px;padding:0 10px;font-size:14px}
+.reports-layout .rep-net-profit strong:last-child{font-size:16px}
+.reports-layout .rep-glance-card h2{margin-bottom:14px}
+.reports-layout .rep-margin-row{font-size:13px}
+.reports-layout .rep-margin-row strong{font-size:16px}
+.reports-layout .rep-margin-track{height:10px;margin:8px 0 12px}
+.reports-layout .rep-glance-card>p{min-height:0;font-size:13px}
+.reports-layout .rep-glance-card>small{margin-top:8px;font-size:12px}
+@media(max-width:1100px){
+  .reports-layout .rep-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .reports-layout .rep-chart-grid,.reports-layout .rep-analysis-grid{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .reports-layout .content{padding:16px 14px 24px}
+  .reports-layout .rep-actions{justify-content:flex-start;flex-wrap:wrap}
+  .reports-layout .rep-filters{width:100%;flex-wrap:wrap}
+  .reports-layout .rep-period-control{width:auto;flex:1 1 170px}
+  .reports-layout .rep-granularity-control{width:auto;flex:1 1 120px}
+  .reports-layout .rep-actions .btn{flex:1 1 auto}
+  .reports-layout .rep-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .reports-layout .rep-stat{padding:14px}
+  .reports-layout .rep-chart-card{height:280px;padding:14px}
+  .reports-layout .rep-analysis-card,.reports-layout .rep-glance-card{padding:16px}
 }

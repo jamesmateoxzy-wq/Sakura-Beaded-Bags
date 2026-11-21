@@ -6,13 +6,10 @@
 (function () {
   'use strict';
 
-  var source = window.SAKURA_PAYMENT_DATA || { demo: false, orders: [], payments: [] };
-  var demo = source.demo === true;
-  var orders = Array.isArray(source.orders) ? source.orders : [];
-  var seed = Array.isArray(source.payments) ? source.payments : [];
-  var storageKey = 'sakura-demo-payments-v1';
-  var added = [];
-  var payments = seed.slice();
+  var store = window.SakuraStore;
+  var state = store.read();
+  var orders = state.orders.filter(order => order.status !== 'Cancelled');
+  var payments = state.payments.filter(payment => orders.some(order => order.id === payment.orderId));
   var selectedSlip = null;
   var page = 1;
   var pageSize = 5;
@@ -26,7 +23,7 @@
       maximumFractionDigits: 2
     });
   }
-  function cents(amount) { return Math.round(Number(amount) * 100); }
+  var cents = store.cents;
   function toPesos(amountInCents) { return amountInCents / 100; }
   function safe(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -39,60 +36,18 @@
       month: 'short', day: 'numeric', year: 'numeric'
     });
   }
-  function todayLocal() {
-    var d = new Date();
-    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
-  }
+  var todayLocal = store.today;
   function orderFor(id) {
     return orders.filter(function (o) { return o.id === id; })[0] || null;
   }
-  function paidCents(orderId) {
-    return payments.filter(function (p) { return p.orderId === orderId; })
-      .reduce(function (sum, p) { return sum + cents(p.amount); }, 0);
-  }
   function balanceCents(order) {
-    return Math.max(0, cents(order.total) - paidCents(order.id));
+    return Math.max(0, cents(order.total) - store.paidCents(payments, order.id));
   }
   function statusFor(p) {
     return cents(p.balanceAfter) <= 0 ? 'Fully Paid' : 'Partial';
   }
   function notice(message) {
     if (window.Sakura && Sakura.toast) Sakura.toast(message);
-  }
-
-  // Validate restored demo data so altered/stale browser storage cannot be
-  // treated as trusted records. Actual payment validation belongs on the server.
-  function loadDemoPayments() {
-    if (!demo) return;
-    try {
-      var stored = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
-      if (!Array.isArray(stored)) return;
-      var seen = {};
-      seed.forEach(function (p) { seen[p.id] = true; });
-      stored.slice(0, 200).forEach(function (p) {
-        if (!p || typeof p !== 'object' || typeof p.id !== 'string' ||
-            !/^SLP-\d+$/.test(p.id) || seen[p.id] || !orderFor(p.orderId) ||
-            !['Cash', 'GCash', 'Bank Transfer'].includes(p.method) ||
-            typeof p.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.date) ||
-            typeof p.reference !== 'string' || p.reference.length > 80 ||
-            !Number.isFinite(Number(p.amount)) || Number(p.amount) <= 0) return;
-
-        var o = orderFor(p.orderId);
-        var balance = balanceCents(o);
-        var amount = cents(p.amount);
-        if (amount <= 0 || amount > balance) return;
-        var clean = {
-          id: p.id, orderId: o.id, amount: toPesos(amount), method: p.method,
-          date: p.date, reference: p.reference, balanceAfter: toPesos(balance - amount)
-        };
-        seen[p.id] = true;
-        added.push(clean);
-        payments.push(clean);
-      });
-    } catch (err) {
-      // Session storage can be unavailable (e.g. strict private browsing).
-      added = [];
-    }
   }
 
   function renderSummary() {
@@ -187,13 +142,8 @@
     });
     if (available.some(function (o) { return o.id === previous; })) select.value = previous;
     updateBalanceHint();
-    $('savePaymentBtn').disabled = !demo || available.length === 0;
-    $('recordPaymentShortcut').disabled = !demo || available.length === 0;
-    if (!demo) {
-      Array.prototype.forEach.call($('recordPaymentForm').querySelectorAll('input, select'), function (field) {
-        field.disabled = true;
-      });
-    }
+    $('savePaymentBtn').disabled = available.length === 0;
+    $('recordPaymentShortcut').disabled = available.length === 0;
   }
 
   function updateBalanceHint() {
@@ -202,6 +152,7 @@
     $('balanceHint').textContent = order
       ? 'Remaining balance: ' + peso(toPesos(left))
       : 'Select an unpaid order to see its balance.';
+    $('paymentDate').min = order ? order.date : '';
     $('paymentAmount').max = order ? String(toPesos(left)) : '';
   }
 
@@ -258,7 +209,7 @@
     var ref = $('paymentReference').value.trim();
 
     if (!order) return { error: 'Please select an unpaid order.' };
-    if (!amountStr || !Number.isFinite(number) || number <= 0 ||
+    if (!amountStr || !Number.isFinite(number) || number < 0.01 ||
         Math.abs(number * 100 - Math.round(number * 100)) > 0.00001) {
       return { error: 'Enter a positive amount with at most two decimal places.' };
     }
@@ -269,20 +220,19 @@
     if (!['Cash', 'GCash', 'Bank Transfer'].includes(method)) {
       return { error: 'Choose a valid payment method.' };
     }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00').getTime()) ||
-        new Date(date + 'T00:00:00').toISOString().slice(0, 10) !== date || date > todayLocal()) {
-      return { error: 'Choose a valid payment date that is not in the future.' };
+    if (!store.validDate(date) || date > todayLocal() || date < order.date) {
+      return { error: 'Choose a payment date between the order date and today.' };
     }
     if (method !== 'Cash' && !ref) return { error: 'Enter the GCash or bank reference number.' };
     if (ref.length > 80) return { error: 'Reference is limited to 80 characters.' };
     if (ref && payments.some(function (p) {
-      return p.method === method && p.reference.toLowerCase() === ref.toLowerCase();
+      return p.method === method && String(p.reference || '').toLowerCase() === ref.toLowerCase();
     })) return { error: 'That reference already exists for this payment method.' };
     return { order: order, amount: toPesos(amount), method: method, date: date, reference: ref };
   }
 
   function nextSlipId() {
-    var maxId = payments.reduce(function (max, p) {
+    var maxId = state.payments.reduce(function (max, p) {
       var match = /^SLP-(\d+)$/.exec(p.id);
       return match ? Math.max(max, Number(match[1])) : max;
     }, 0);
@@ -291,7 +241,7 @@
 
   function submitPayment(event) {
     event.preventDefault();
-    if (!demo || busy) return;
+    if (busy) return;
     $('paymentFormError').hidden = true;
     var data = validatePayment();
     if (data.error) {
@@ -309,15 +259,13 @@
         reference: data.reference || 'CASH-' + id,
         balanceAfter: balanceAfter
       };
-      // The write is intentionally demo-only; it is NOT a real settlement.
-      added.push(entry);
-      payments.push(entry);
-      var stored = true;
-      try {
-        sessionStorage.setItem(storageKey, JSON.stringify(added));
-      } catch (storageError) {
-        stored = false;
+      state.payments.push(entry);
+      if (!store.save(state)) {
+        state.payments.pop();
+        showError('Could not save the payment.');
+        return;
       }
+      payments.push(entry);
       $('recordPaymentForm').reset();
       $('paymentDate').value = todayLocal();
       $('paymentMethod').value = 'GCash';
@@ -330,22 +278,16 @@
       renderOrderChoices();
       renderTransactions();
       renderSlip();
-      notice(stored ? 'Demo payment recorded in this tab' : 'Demo payment recorded (refresh will clear it)');
+      notice('Payment recorded.');
     } finally {
       busy = false;
-      $('savePaymentBtn').disabled = !demo || orders.every(function (o) { return balanceCents(o) === 0; });
+      $('savePaymentBtn').disabled = orders.every(function (o) { return balanceCents(o) === 0; });
     }
   }
 
   function init() {
-    if (!demo) {
-      seed = [];
-      payments = [];
-    } else {
-      loadDemoPayments();
-    }
     $('paymentDate').max = todayLocal();
-    if ($('paymentDate').value > todayLocal()) $('paymentDate').value = todayLocal();
+    $('paymentDate').value = todayLocal();
     $('paymentSearch').addEventListener('input', function () { page = 1; renderTransactions(); });
     $('paymentFilter').addEventListener('change', function () { page = 1; renderTransactions(); });
     $('paymentRows').addEventListener('click', function (event) {
@@ -368,7 +310,11 @@
     selectedSlip = payments.length ? payments[0].id : null;
     renderTransactions();
     renderSlip();
-    if (new URLSearchParams(window.location.search).get('action') === 'record' && demo) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'record') {
+      const order = orderFor(params.get('order'));
+      if (order && balanceCents(order) > 0) $('paymentOrder').value = order.id;
+      updateBalanceHint();
       $('recordPaymentCard').scrollIntoView({ block: 'center' });
       $('paymentOrder').focus();
     }

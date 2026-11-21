@@ -4,9 +4,6 @@
  * Demo changes are browser-session only; production requires a protected PHP/MySQL API.
  * Handoff: docs/OPERATIONS_HANDOFF.md
  */
-require_once __DIR__ . '/../includes/config.php';
-if (session_status() === PHP_SESSION_NONE) session_start();
-$isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
 $pageTitle = 'Inventory Management';
 $pageSubtitle = 'Every bead accounted for, every bag ready to begin.';
 $activePage = 'inventory';
@@ -15,12 +12,12 @@ $pageJs = 'inventory.js';
 $pageBodyClass = 'inventory-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
-<section class="ops-page" id="operationsPage" data-module="inventory" data-demo="<?= $isDemo ? '1' : '0' ?>">
+<section class="ops-page" id="operationsPage" data-module="inventory">
   <section class="ops-stats" aria-label="Inventory overview">
     <article class="card inv-stat">
       <div><span>Material Types</span><?= icon('inventory') ?></div>
       <strong id="invTotal">0</strong>
-      <small>Across 6 material categories</small>
+      <small>Registered in Product Costing &amp; Pricing</small>
     </article>
     <article class="card inv-stat">
       <div><span>Inventory Value</span><?= icon('wallet') ?></div>
@@ -35,7 +32,7 @@ require_once __DIR__ . '/../includes/header.php';
     <article class="card inv-stat">
       <div><span>Stock-In This Month</span><?= icon('box') ?></div>
       <strong id="invStockInCount">0</strong>
-      <small>Latest delivery: October 28</small>
+      <small>Current month receipts</small>
     </article>
   </section>
   <section class="card inv-inventory-panel">
@@ -46,10 +43,10 @@ require_once __DIR__ . '/../includes/header.php';
         <input type="search" id="invSearch" placeholder="Search material ID or name">
       </label>
       <div class="inv-toolbar-actions">
-        <button type="button" class="btn inv-correction-button" id="invOpenCorrection" <?= $isDemo ? '' : 'disabled' ?>>
+        <button type="button" class="btn inv-correction-button" id="invOpenCorrection">
           <?= icon('sliders') ?><span>Stock<br>Correction</span>
         </button>
-        <button type="button" class="btn btn-primary inv-stockin-button" id="invOpenStockIn" <?= $isDemo ? '' : 'disabled' ?>>
+        <button type="button" class="btn btn-primary inv-stockin-button" id="invOpenStockIn">
           <?= icon('plus') ?><span>Stock-In</span>
         </button>
       </div>
@@ -59,7 +56,7 @@ require_once __DIR__ . '/../includes/header.php';
         <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Cost</th><th>Quantity</th><th>Threshold</th><th>Status</th></tr></thead>
         <tbody id="invRows"></tbody>
       </table>
-      <p class="inv-empty" id="invEmpty" hidden>No materials match your search.</p>
+      <p class="inv-empty" id="invEmpty" hidden>No matching materials. <a href="products.php">Register materials in Product Costing &amp; Pricing</a>.</p>
     </div>
   </section>
   <section class="inv-lower-grid">
@@ -100,24 +97,23 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="inv-dialog-field">
               <label for="invStockInQty">Received quantity *</label>
               <div class="inv-control inv-quantity-control">
-                <input id="invStockInQty" type="number" min="1" max="1000000" step="1" value="200" required>
+                <input id="invStockInQty" type="number" min="0.001" max="1000000" step="0.001" value="200" required>
                 <span class="inv-unit" id="invStockInUnit">pcs</span>
                 <button type="button" class="inv-edit" data-focus="invStockInQty" aria-label="Edit received quantity"><?= icon('edit') ?></button>
               </div>
             </div>
             <div class="inv-dialog-field">
-              <label for="invStockInCost">Unit cost *</label>
+              <label for="invStockInCost">Catalog unit cost</label>
               <div class="inv-control inv-cost-control">
                 <span class="inv-currency">₱</span>
-                <input id="invStockInCost" type="number" min="0" max="1000000" step="0.01" value="2.00" required>
-                <button type="button" class="inv-edit" data-focus="invStockInCost" aria-label="Edit unit cost"><?= icon('edit') ?></button>
+                <input id="invStockInCost" type="number" readonly>
               </div>
             </div>
           </div>
           <div class="inv-dialog-field inv-date-field">
             <label for="invStockInDate">Date *</label>
             <div class="inv-control">
-              <input id="invStockInDate" type="text" value="Oct 28, 2026" required>
+              <input id="invStockInDate" type="date" required>
               <button type="button" class="inv-edit" data-focus="invStockInDate" aria-label="Edit date"><?= icon('edit') ?></button>
             </div>
           </div>
@@ -156,7 +152,7 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
             <div class="inv-dialog-field">
               <label for="invAdjustQty">Quantity *</label>
-              <input id="invAdjustQty" type="number" min="1" max="1000000" step="1" value="1" required>
+              <input id="invAdjustQty" type="number" min="0.001" max="1000000" step="0.001" value="1" required>
             </div>
           </div>
           <p class="inv-dialog-error" id="invAdjustError" role="alert" hidden></p>

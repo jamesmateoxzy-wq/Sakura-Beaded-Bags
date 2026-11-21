@@ -11,38 +11,7 @@
  *
  * Backend handoff: docs/PAYMENTS_SALES_HANDOFF.md
  */
-require_once __DIR__ . '/../includes/functions.php';
-require_once __DIR__ . '/../includes/config.php';
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
 
-$isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
-
-// These are fictitious test orders, not customer/business records.
-// TODO (backend): replace with SELECT from orders (id, customer, total, item).
-$sampleOrders = [
-    ['id' => 'ORD-001', 'customer' => 'Maria Santos',   'item' => 'Pearl Heart Bag',    'total' => 1200],
-    ['id' => 'ORD-002', 'customer' => 'Ana Reyes',      'item' => 'Sakura Mini Pouch',  'total' => 850],
-    ['id' => 'ORD-003', 'customer' => 'Camille Cruz',   'item' => 'Classic Tote',       'total' => 1500],
-    ['id' => 'ORD-004', 'customer' => 'Isabel Garcia',  'item' => 'Petal Handbag',      'total' => 1200],
-    ['id' => 'ORD-005', 'customer' => 'Sofia Ramos',    'item' => 'Beaded Phone Bag',   'total' => 800],
-    ['id' => 'ORD-006', 'customer' => 'Louise Santos',  'item' => 'Daisy Set',          'total' => 1800],
-    ['id' => 'ORD-007', 'customer' => 'Michelle Cruz',  'item' => 'Pink Ribbon Bag',    'total' => 975],
-];
-
-// TODO (backend): replace with SELECT from payments; use stored order totals
-// and SUM(payment.amount) per order when computing balances.
-$samplePayments = [
-    ['id' => 'SLP-001', 'orderId' => 'ORD-001', 'amount' => 1200, 'method' => 'GCash',         'date' => '2026-10-28', 'reference' => 'GC-1028-001', 'balanceAfter' => 0],
-    ['id' => 'SLP-002', 'orderId' => 'ORD-002', 'amount' => 850,  'method' => 'GCash',         'date' => '2026-10-28', 'reference' => 'GC-1028-002', 'balanceAfter' => 0],
-    ['id' => 'SLP-003', 'orderId' => 'ORD-003', 'amount' => 1500, 'method' => 'Bank Transfer', 'date' => '2026-10-26', 'reference' => 'BANK-1026-03', 'balanceAfter' => 0],
-    ['id' => 'SLP-004', 'orderId' => 'ORD-004', 'amount' => 600,  'method' => 'Cash',          'date' => '2026-10-25', 'reference' => 'CASH-1025-04', 'balanceAfter' => 600],
-    ['id' => 'SLP-005', 'orderId' => 'ORD-005', 'amount' => 200,  'method' => 'GCash',         'date' => '2026-10-25', 'reference' => 'GC-1025-005', 'balanceAfter' => 600],
-];
-
-$orders = $isDemo ? $sampleOrders : [];
-$payments = $isDemo ? $samplePayments : [];
 
 $pageTitle = 'Payments & Sales';
 $pageSubtitle = 'A clear view of every payment and outstanding balance.';
@@ -53,19 +22,11 @@ $pageJs = 'payments.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="payments-page" aria-label="Payments and Sales">
-    <?php if ($isDemo): ?>
-        <div class="pay-mode-banner" role="status">
-            <strong>Demo preview</strong> &middot; Fictitious records only. Any payments you record are kept in this browser tab, not in MySQL.
-        </div>
-    <?php else: ?>
-        <div class="pay-mode-banner" role="status">
-            <strong>Database connection pending</strong> &middot; Connect the Orders and Payments backend to display real records and enable recording.
-        </div>
-    <?php endif; ?>
+    <div class="pay-mode-banner" role="status">Prototype records for this browser tab.</div>
 
     <div class="pay-stats" aria-label="Payment summary">
         <article class="card pay-stat">
-            <div class="pay-stat-label"><span>Total Sales</span><span class="pay-stat-symbol" aria-hidden="true">↗</span></div>
+            <div class="pay-stat-label"><span>Booked Sales</span><span class="pay-stat-symbol" aria-hidden="true">↗</span></div>
             <strong id="totalSales">₱0</strong>
             <small id="salesNote">0 orders</small>
         </article>
@@ -164,7 +125,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <p id="paymentFormError" class="pay-error" role="alert" hidden></p>
                 <div class="pay-form-actions">
                     <span id="balanceHint">Select an unpaid order to see its balance.</span>
-                    <button type="submit" class="btn btn-primary" id="savePaymentBtn">Save Demo Payment</button>
+                    <button type="submit" class="btn btn-primary" id="savePaymentBtn">Record Payment</button>
                 </div>
             </form>
         </section>
@@ -192,15 +153,9 @@ require_once __DIR__ . '/../includes/header.php';
                     <div><small>Balance after payment</small><strong id="slipBalance"></strong></div>
                 </div>
                 <p class="pay-slip-note" id="slipNote"></p>
-                <p class="pay-slip-disclaimer" id="slipDisclaimer" <?= $isDemo ? '' : 'hidden' ?>>DEMO ONLY &middot; Not a valid receipt or proof of payment.</p>
+                <p class="pay-slip-disclaimer" id="slipDisclaimer">DEMO ONLY &middot; Not a valid receipt or proof of payment.</p>
             </div>
         </section>
     </div>
 </section>
-<script>
-window.SAKURA_PAYMENT_DATA = <?= json_encode(
-    ['demo' => $isDemo, 'orders' => $orders, 'payments' => $payments],
-    JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-) ?>;
-</script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

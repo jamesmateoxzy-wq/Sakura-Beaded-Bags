@@ -4,98 +4,27 @@
   var root = document.getElementById('operationsPage');
   if (!root || root.dataset.module !== 'orders') return;
 
-  var demo = root.dataset.demo === '1';
   var $ = function (id) { return document.getElementById(id); };
-  var key = 'sakura-operations-v1';
-  var storageUnavailable = false;
-  var storageFailureReported = false;
-  var materialsSeed = [
-    { id:'MAT-001', name:'Pink Beads', unit:'pcs', cost:2, stock:10, min:50 },
-    { id:'MAT-002', name:'Nylon Thread', unit:'roll', cost:40, stock:3, min:5 },
-    { id:'MAT-003', name:'Bag Handles', unit:'pcs', cost:55, stock:5, min:10 },
-    { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', cost:2, stock:600, min:100 },
-    { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', cost:3, stock:450, min:100 },
-    { id:'MAT-006', name:'Clasps', unit:'pcs', cost:30, stock:4, min:10 },
-    { id:'MAT-007', name:'Pink Ribbon', unit:'roll', cost:25, stock:2, min:5 }
-  ];
-  var products = [
-    { id:'heart', name:'Heart Bag', price:1200, labor:200, packaging:50, materials:[
-      { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', qty:100, cost:2 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-003', name:'Bag Handles', unit:'pcs', qty:2, cost:55 }
-    ] },
-    { id:'pink', name:'Pink Bag', price:850, labor:150, packaging:50, materials:[
-      { id:'MAT-001', name:'Pink Beads', unit:'pcs', qty:100, cost:2 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-006', name:'Clasps', unit:'pcs', qty:2, cost:30 }
-    ] },
-    { id:'pearl', name:'Pearl Tote', price:1500, labor:250, packaging:50, materials:[
-      { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', qty:100, cost:3 },
-      { id:'MAT-002', name:'Nylon Thread', unit:'roll', qty:1, cost:40 },
-      { id:'MAT-003', name:'Bag Handles', unit:'pcs', qty:2, cost:55 }
-    ] }
-  ];
-  var samples = [
-    { id:'ORD-001', customerId:'CUST-001', slipId:'SLP-001', customer:'Maria Santos', address:'Manila City', product:'Heart Bag', qty:1, unitPrice:1200, total:1200, date:'2026-10-28', dueDate:'2026-10-31', status:'Pending', delivery:'Pending', payment:'Fully Paid', deposit:1200, notes:'', labor:200, packaging:50, dpPolicy:50, materials:products[0].materials },
-    { id:'ORD-002', customerId:'CUST-002', slipId:'SLP-002', customer:'Ana Reyes', address:'Manila City', product:'Pink Bag', qty:1, unitPrice:850, total:850, date:'2026-10-28', dueDate:'2026-11-01', status:'In Progress', delivery:'Pending', payment:'Fully Paid', deposit:850, notes:'', labor:150, packaging:50, dpPolicy:50, materials:products[1].materials },
-    { id:'ORD-003', customerId:'CUST-003', slipId:'SLP-003', customer:'Camille Cruz', address:'Manila City', product:'Pearl Tote', qty:1, unitPrice:1500, total:1500, date:'2026-10-26', dueDate:'2026-10-30', status:'Completed', delivery:'Delivered', payment:'Fully Paid', deposit:1500, notes:'', labor:250, packaging:50, dpPolicy:50, materials:products[2].materials },
-    { id:'ORD-004', customerId:'CUST-004', slipId:'SLP-004', customer:'Isabel Garcia', address:'Manila City', product:'Heart Bag', qty:1, unitPrice:1200, total:1200, date:'2026-10-25', dueDate:'2026-10-31', status:'In Progress', delivery:'Pending', payment:'Fully Paid', deposit:1200, notes:'', labor:200, packaging:50, dpPolicy:50, materials:products[0].materials }
-  ];
+  var store = window.SakuraStore;
+  var data = store.read();
+  var orders = data.orders;
+  var products = data.products;
+  var materials = data.materials;
+
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
-  function loadStore() {
-    try { return JSON.parse(sessionStorage.getItem(key) || '{}'); }
-    catch (error) {
-      storageUnavailable = true;
-      reportStorageFailure();
-      return {};
-    }
-  }
-  function loadOrders() {
-    if (!demo) return [];
-    var stored = loadStore();
-    if (!Array.isArray(stored.orders)) return clone(samples);
-    return stored.orders.map(function (order) {
-      var sample = samples.find(function (item) { return item.id === order.id; });
-      return Object.assign({}, sample || {}, order);
-    });
-  }
-  function loadMaterials() {
-    if (!demo) return [];
-    var stored = loadStore();
-    return Array.isArray(stored.materials) ? stored.materials : clone(materialsSeed);
-  }
-  function save() {
-    if (!demo) return false;
-    if (storageUnavailable) return false;
-    try {
-      var stored = loadStore();
-      if (storageUnavailable) return false;
-      stored.orders = orders;
-      sessionStorage.setItem(key, JSON.stringify(stored));
-      return true;
-    } catch (error) {
-      storageUnavailable = true;
-      reportStorageFailure();
-      return false;
-    }
-  }
+
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
     });
   }
   function money(value, decimals) {
-    var places = decimals === undefined ? 0 : decimals;
+    var places = decimals === undefined ? 2 : decimals;
     return '₱' + Number(value || 0).toLocaleString('en-PH', {minimumFractionDigits:places, maximumFractionDigits:places});
   }
   function dateText(value) {
     var date = new Date(value + 'T00:00:00');
     return isNaN(date.getTime()) ? value : date.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
-  }
-  function dateValue(value) {
-    var date = value instanceof Date ? value : new Date(value);
-    if (isNaN(date.getTime())) return '';
-    return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
   }
   function badgeClass(status) {
     return status === 'Completed' || status === 'Delivered' || status === 'Fully Paid' ? 'badge-green' :
@@ -107,11 +36,6 @@
   function notify(message) {
     if (window.Sakura && Sakura.toast) Sakura.toast(message);
   }
-  function reportStorageFailure() {
-    if (storageFailureReported) return;
-    storageFailureReported = true;
-    notify('Could not read or save demo changes in this browser session.');
-  }
   function openModal(id) {
     if (window.Sakura) Sakura.openModal(id);
   }
@@ -119,7 +43,7 @@
     if (window.Sakura) Sakura.closeModal(id);
   }
   function selectedProduct() {
-    return products.find(function (product) { return product.id === $('ordProduct').value; }) || products[0];
+    return products.find(function (product) { return String(product.id) === $('ordProduct').value; });
   }
   function nextOrderNumber() {
     return orders.reduce(function (max, order) {
@@ -129,12 +53,9 @@
   function orderId(number) { return 'ORD-' + String(number).padStart(3, '0'); }
   function cloneBom(items) { return clone(items || []); }
 
-  var orders = loadOrders();
-  var materials = loadMaterials();
   var activeGroup = 'all';
   var activeOrderId = 'ORD-001';
   var currentBom = [];
-  var pendingMaterial = null;
   var detailOrder = null;
 
   function cardMarkup(order, index) {
@@ -143,29 +64,28 @@
       '<h3>' + esc(order.customer) + '</h3>' +
       '<div class="order-card-product"><span>' + esc(order.product) + ' ×' + order.qty + '</span><strong>' + money(order.total) + '</strong></div>' +
       '<p class="order-card-due">Due ' + dateText(order.dueDate || order.date) + '</p>' +
-      '<div class="order-card-badges">' + badge(order.status) + badge(order.payment || 'Unpaid') + '</div>' +
+      '<div class="order-card-badges">' + badge(order.status) + badge(paymentStatus(order)) + '</div>' +
       '<span class="order-card-link" data-view="' + esc(order.id) + '">Click to view details →</span></article>';
   }
   function render() {
     var query = $('ordSearch').value.trim().toLowerCase();
     var filter = $('ordFilter').value;
     var shown = orders.filter(function (order) {
-      var archived = order.archived || order.status === 'Completed' || order.status === 'Delivered' || order.status === 'Cancelled';
+      var archived = order.archived;
       var inGroup = activeGroup === 'all' ||
-        (activeGroup === 'production' && !archived) ||
+        (activeGroup === 'production' && ['Pending', 'In Progress', 'Completed'].includes(order.status)) ||
         (activeGroup === 'archived' && archived);
       return inGroup && (filter === 'all' || order.status === filter) &&
         (!query || (order.id + ' ' + order.customer + ' ' + order.product).toLowerCase().includes(query));
     }).sort(function (a, b) { return a.id.localeCompare(b.id); });
 
-    $('ordTotal').textContent = demo ? 32 + Math.max(0, orders.length - samples.length) : orders.length;
-    $('ordProduction').textContent = demo ? Math.max(0, 8 + orders.filter(function (o) { return !o.archived && (o.status === 'Pending' || o.status === 'In Progress'); }).length - 3) :
-      orders.filter(function (o) { return !o.archived && (o.status === 'Pending' || o.status === 'In Progress'); }).length;
+    $('ordTotal').textContent = orders.length;
+    $('ordProduction').textContent = orders.filter(order => order.status === 'Pending' || order.status === 'In Progress').length;
     $('ordRows').innerHTML = shown.map(function (order) {
       return '<tr data-view="' + esc(order.id) + '"><td>' + esc(order.id) + '</td><td>' + dateText(order.date) +
         '</td><td>' + esc(order.customer) + '</td><td>' + esc(order.product) + ' ×' + order.qty +
         '</td><td>' + money(order.total) + '</td><td>' + badge(order.status) +
-        '</td><td>' + badge(order.delivery || 'Pending') + '</td><td>' + badge(order.payment || 'Unpaid') + '</td></tr>';
+        '</td><td>' + badge(order.delivery || 'Pending') + '</td><td>' + badge(paymentStatus(order)) + '</td></tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     var currentOrders = orders.filter(function (order) {
@@ -181,99 +101,58 @@
 
   function renderProductOptions() {
     $('ordProduct').innerHTML = products.map(function (product) {
-      return '<option value="' + esc(product.id) + '">' + esc(product.name) + ' · ' + money(product.price) + '</option>';
+      return '<option value="' + esc(product.id) + '">' + esc(product.name) + ' · ' + money(store.costing(product).price) + '</option>';
     }).join('');
   }
   function calculateOrder() {
     var product = selectedProduct();
     var qty = Math.max(1, Number($('ordQty').value) || 1);
-    var materialCost = currentBom.reduce(function (sum, material) { return sum + Number(material.qty) * Number(material.cost); }, 0);
-    var unitCost = materialCost + (Number($('ordLabor').value) || 0) + (Number($('ordPackaging').value) || 0);
-    var unitPrice = Number(product.price) || 0;
-    var total = unitPrice * qty;
-    var dp = total * Math.max(0, Math.min(100, Number($('ordDpPolicy').value) || 0)) / 100;
-    $('ordUnitCost').textContent = money(unitCost);
-    $('ordUnitPrice').textContent = money(unitPrice);
-    $('ordTotalPrice').textContent = money(total);
-    $('ordDownpayment').textContent = money(dp);
+    const unit = store.costing(product);
+    const total = store.cents(unit.price) * qty;
+    const policy = Number($('ordDpPolicy').value);
+    $('ordUnitCost').textContent = money(unit.cost);
+    $('ordUnitPrice').textContent = money(unit.price);
+    $('ordTotalPrice').textContent = money(total / 100);
+    $('ordDownpayment').textContent = money(Math.round(total * policy / 100) / 100);
   }
   function renderBom() {
     var orderQty = Math.max(1, Number($('ordQty').value) || 1);
-    $('ordBomRows').innerHTML = currentBom.map(function (item, index) {
-      var quantity = Number(item.qty) * orderQty;
+    $('ordBomRows').innerHTML = currentBom.map(function (item) {
+      var quantity = Math.round(item.qty * orderQty * 1000) / 1000;
       return '<tr><td>' + esc(item.name) + '</td><td>' + quantity + '</td><td>' + money(item.cost) +
-        '</td><td>' + money(quantity * Number(item.cost)) + '</td><td><button type="button" class="order-remove-material" data-remove-material="' + index + '" aria-label="Remove ' + esc(item.name) + '">×</button></td></tr>';
+        '</td><td>' + money(store.cents(item.qty * item.cost) * orderQty / 100) + '</td></tr>';
     }).join('');
     calculateOrder();
   }
   function resetCreateForm() {
     $('ordCreateForm').reset();
     $('ordId').value = orderId(nextOrderNumber());
-    $('ordCustomer').value = 'Elena Mendoza';
-    $('ordAddress').value = 'Manila City';
-    $('ordProduct').value = 'heart';
-    $('ordQty').value = '1';
-    $('ordDueDate').value = 'Nov 1, 2026';
-    $('ordNotes').value = 'Gift wrap, please. Customer will pick up.';
-    $('ordLabor').value = '200';
-    $('ordPackaging').value = '50';
-    $('ordDpPolicy').value = '50';
-    currentBom = cloneBom(products[0].materials);
+    $('ordDueDate').min = store.today();
+    $('ordDueDate').value = store.today();
     $('ordCreateError').hidden = true;
+    loadProduct();
+  }
+
+  function loadProduct() {
+    const product = selectedProduct();
+    currentBom = cloneBom(product.materials);
+    $('ordLabor').value = product.labor;
+    $('ordPackaging').value = product.packaging;
     renderBom();
   }
-  function renderMaterialOptions() {
-    $('ordMaterialSelect').innerHTML = materials.map(function (material) {
-      return '<option value="' + esc(material.id) + '">' + esc(material.name) + ' · ' + material.stock + ' ' + esc(material.unit) + '</option>';
-    }).join('');
-    if (!materials.length) $('ordMaterialSelect').innerHTML = '<option value="">No inventory materials available</option>';
+
+  function paymentStatus(order) {
+    const paid = store.paidCents(data.payments, order.id);
+    return paid >= store.cents(order.total) ? 'Fully Paid' : paid > 0 ? 'Partial' : 'Unpaid';
   }
-  function selectedMaterial() {
-    return materials.find(function (material) { return material.id === $('ordMaterialSelect').value; });
-  }
-  function updateMaterialDialog() {
-    var material = selectedMaterial();
-    var quantity = Math.max(0, Number($('ordMaterialQty').value) || 0);
-    $('ordMaterialError').hidden = true;
-    if (!material) {
-      $('ordMaterialMeta').textContent = 'Add materials in Inventory Management first.';
-      $('ordMaterialCost').value = '';
-      $('ordMaterialAmount').textContent = money(0, 2);
-      $('ordMaterialCalc').textContent = '';
-      $('ordStockWarning').hidden = true;
-      return;
-    }
-    var remainder = Number(material.stock) - quantity;
-    var cost = Number(material.cost) || 0;
-    $('ordMaterialCost').value = money(cost, 2) + ' / ' + material.unit.replace(/s$/, '');
-    $('ordMaterialMeta').textContent = material.id + ' · In stock: ' + material.stock + ' ' + material.unit + ' · Reorder threshold: ' + (material.min || 0) + ' ' + material.unit;
-    $('ordMaterialAmount').textContent = money(quantity * cost, 2);
-    $('ordMaterialCalc').textContent = quantity + ' ' + material.unit + ' × ' + money(cost, 2);
-    $('ordStockWarning').hidden = !(quantity > 0 && remainder < Number(material.min || 0));
-    $('ordStockWarningText').textContent = material.stock + ' − ' + quantity + ' = ' + Math.max(0, remainder) + ' ' + material.unit + ' remaining, below the ' + (material.min || 0) + ' ' + material.unit + ' threshold.';
-  }
-  function addMaterialToOrder() {
-    var material = selectedMaterial();
-    var quantity = Number($('ordMaterialQty').value);
-    if (!material || !Number.isInteger(quantity) || quantity <= 0) {
-      $('ordMaterialError').textContent = 'Select a material and enter a whole quantity greater than zero.';
-      $('ordMaterialError').hidden = false;
-      return;
-    }
-    if (quantity > Number(material.stock)) {
-      $('ordMaterialError').textContent = 'The requested quantity exceeds the available stock.';
-      $('ordMaterialError').hidden = false;
-      return;
-    }
-    currentBom.push({ id:material.id, name:material.name, unit:material.unit, qty:quantity, cost:Number(material.cost) || 0 });
-    renderBom();
-    closeModal('ordMaterialModal');
-    notify(material.name + ' added to this order.');
-  }
+
+  const nextStatus = {'Pending':'In Progress', 'In Progress':'Completed', 'Completed':'Delivered'};
+  const actionLabel = {'Pending':'Start Production', 'In Progress':'Mark Completed', 'Completed':'Mark Delivered'};
+
   function updateDetail(order) {
     detailOrder = order;
     $('ordDetailId').value = order.id;
-    $('ordDetailCode').textContent = order.id + ' · ' + (order.customerId || 'CUST-' + order.id.slice(-3)) + ' · ' + (order.slipId || 'SLP-' + order.id.slice(-3));
+    $('ordDetailCode').textContent = order.id + ' · ' + (order.customerId || 'CUST-' + order.id.slice(-3));
     $('ordDetailCustomer').textContent = order.customer;
     $('ordDetailAddress').textContent = order.address || 'Address not provided';
     $('ordDetailDate').textContent = dateText(order.date);
@@ -283,8 +162,20 @@
     $('ordDetailTotal').textContent = money(order.total);
     $('ordDetailProduction').textContent = order.status;
     $('ordDetailProduction').className = 'badge ' + badgeClass(order.status);
-    $('ordDetailPayment').textContent = order.payment || 'Unpaid';
-    $('ordDetailPayment').className = 'badge ' + badgeClass(order.payment || 'Unpaid');
+    $('ordDetailPayment').textContent = paymentStatus(order);
+    $('ordDetailPayment').className = 'badge ' + badgeClass(paymentStatus(order));
+    $('ordAdvance').hidden = !nextStatus[order.status];
+    $('ordAdvance').textContent = actionLabel[order.status] || '';
+    $('ordCancel').hidden = order.status !== 'Pending';
+    $('ordArchive').hidden = order.archived || !['Cancelled', 'Delivered'].includes(order.status);
+    const paid = store.paidCents(data.payments, order.id);
+    const balance = Math.max(0, store.cents(order.total) - paid);
+    const deposit = Math.max(0, store.cents(order.requiredDeposit || 0) - paid);
+    $('ordDetailBalance').textContent = order.status === 'Cancelled' ? '' :
+      'Balance ' + money(balance / 100) + (deposit ? ' · Deposit still due ' + money(deposit / 100) : '');
+    $('ordDetailNotes').textContent = order.notes || '';
+    $('ordRecordPayment').hidden = order.status === 'Cancelled' || balance === 0;
+    $('ordRecordPayment').href = 'payments.php?action=record&order=' + encodeURIComponent(order.id);
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
   }
@@ -298,7 +189,6 @@
   }
 
   renderProductOptions();
-  renderMaterialOptions();
   $('ordSearch').addEventListener('input', render);
   $('ordFilter').addEventListener('change', render);
   document.querySelectorAll('.orders-tab').forEach(function (tab) {
@@ -308,7 +198,7 @@
     var rows = [['Order ID','Date','Customer','Product','Quantity','Unit Price PHP','Total PHP','Status']]
       .concat(orders.map(function (o) { return [o.id,o.date,o.customer,o.product,o.qty,o.unitPrice,o.total,o.status]; }));
     var csv = '\ufeff' + rows.map(function (row) {
-      return row.map(function (value) { return '"' + String(value).replace(/"/g,'""') + '"'; }).join(',');
+      return row.map(store.csvCell).join(',');
     }).join('\r\n');
     var url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
     var link = document.createElement('a');
@@ -316,74 +206,60 @@
     URL.revokeObjectURL(url);
   });
   $('ordNew').addEventListener('click', function () {
-    if (!demo) return;
+    if (!products.length) { notify('Add a product in Product Costing & Pricing first.'); return; }
     resetCreateForm();
     openModal('ordCreateModal');
   });
   document.querySelectorAll('[data-focus]').forEach(function (button) {
     button.addEventListener('click', function () { $(button.dataset.focus).focus(); });
   });
-  $('ordProduct').addEventListener('change', function () {
-    var product = selectedProduct();
-    currentBom = cloneBom(product.materials);
-    $('ordLabor').value = product.labor;
-    $('ordPackaging').value = product.packaging;
-    renderBom();
-  });
-  ['ordQty', 'ordLabor', 'ordPackaging', 'ordDpPolicy'].forEach(function (id) {
-    $(id).addEventListener('input', renderBom);
-  });
-  $('ordBomRows').addEventListener('click', function (event) {
-    var button = event.target.closest('[data-remove-material]');
-    if (!button) return;
-    currentBom.splice(Number(button.dataset.removeMaterial), 1);
-    renderBom();
-  });
-  $('ordAddMaterial').addEventListener('click', function () {
-    if (!demo) return;
-    var number = $('ordId').value;
-    $('ordMaterialContext').textContent = 'Adding to ' + number + ' · ' + selectedProduct().name;
-    renderMaterialOptions();
-    var pearl = materials.find(function (material) { return material.id === 'MAT-005'; });
-    $('ordMaterialSelect').value = pearl ? pearl.id : materials[0] ? materials[0].id : '';
-    $('ordMaterialQty').value = pearl ? '400' : '1';
-    updateMaterialDialog();
-    openModal('ordMaterialModal');
-  });
-  $('ordMaterialSelect').addEventListener('change', function () {
-    var material = selectedMaterial();
-    $('ordMaterialQty').value = material && material.id === 'MAT-005' ? '400' : '1';
-    updateMaterialDialog();
-  });
-  $('ordMaterialQty').addEventListener('input', updateMaterialDialog);
-  $('ordMaterialAdd').addEventListener('click', addMaterialToOrder);
+  $('ordProduct').addEventListener('change', loadProduct);
+  ['ordQty', 'ordDpPolicy'].forEach(id => $(id).addEventListener('input', renderBom));
   $('ordCreateForm').addEventListener('submit', function (event) {
     event.preventDefault();
     var customer = $('ordCustomer').value.trim();
     var address = $('ordAddress').value.trim();
     var qty = Number($('ordQty').value);
-    var dueDate = dateValue($('ordDueDate').value);
-    var product = selectedProduct();
-    if (!demo || !customer || !address || !product || !Number.isInteger(qty) || qty < 1 || !dueDate) {
-      $('ordCreateError').textContent = 'Complete all required fields with valid values.';
+    const dueDate = $('ordDueDate').value;
+    const product = selectedProduct();
+    const policy = Number($('ordDpPolicy').value);
+    function fail(message) {
+      $('ordCreateError').textContent = message;
       $('ordCreateError').hidden = false;
+    }
+    if (!customer || !address || !product || !Number.isInteger(qty) || qty < 1 || qty > 1000 ||
+        !store.validDate(dueDate) || dueDate < store.today() || policy < 0 || policy > 100) {
+      fail('Enter a valid order quantity, customer, address and due date.');
       return;
     }
-    var number = nextOrderNumber();
-    var unitPrice = Number(product.price);
-    var total = unitPrice * qty;
-    var deposit = total * Math.max(0, Math.min(100, Number($('ordDpPolicy').value) || 0)) / 100;
+    const number = nextOrderNumber();
+    const id = orderId(number);
+    const unitPrice = store.costing(product).price;
+    const total = store.cents(unitPrice) * qty / 100;
+    const allocations = currentBom.map(item => ({
+      material:materials.find(material => material.id === item.id),
+      qty:Math.round(item.qty * qty * 1000) / 1000
+    }));
+    const short = allocations.find(entry => !entry.material || entry.qty > entry.material.stock);
+    if (short) {
+      fail(short.material ? 'Insufficient stock for ' + short.material.name + '. Record a Stock-In first.' :
+        'A material is missing. Update the product recipe in Product Costing & Pricing.');
+      return;
+    }
+    const previousStocks = allocations.map(entry => entry.material.stock);
+    allocations.forEach(entry => store.movement(data, entry.material, id + ' reserved', -entry.qty));
     orders.push({
-      id:orderId(number), customerId:'CUST-' + String(number).padStart(3,'0'), slipId:'SLP-' + String(number).padStart(3,'0'),
-      customer:customer, address:address, product:product.name, qty:qty, unitPrice:unitPrice, total:total,
-      date:dateValue(new Date()), dueDate:dueDate, status:'Pending', delivery:'Pending',
-      payment:deposit <= 0 ? 'Unpaid' : deposit >= total ? 'Fully Paid' : 'Partial',
-      deposit:deposit, notes:$('ordNotes').value.trim(), labor:Number($('ordLabor').value) || 0,
-      packaging:Number($('ordPackaging').value) || 0, dpPolicy:Number($('ordDpPolicy').value) || 0,
-      materials:cloneBom(currentBom)
+      id, customerId:'CUST-' + String(number).padStart(3,'0'), customer, address,
+      productId:product.id, product:product.name, qty, unitPrice, total,
+      date:store.today(), dueDate, status:'Pending', delivery:'Pending',
+      requiredDeposit:Math.round(store.cents(total) * policy / 100) / 100,
+      notes:$('ordNotes').value.trim(), labor:product.labor, packaging:product.packaging,
+      materials:cloneBom(currentBom), stockReserved:true
     });
-    if (!save()) {
+    if (!store.save(data)) {
       orders.pop();
+      allocations.forEach((entry, index) => { entry.material.stock = previousStocks[index]; });
+      data.inventoryHistory.splice(0, allocations.length);
       return;
     }
     closeModal('ordCreateModal');
@@ -411,7 +287,7 @@
     var target = $('ordDetailBom');
     if (target.hidden) {
       target.innerHTML = '<ul>' + (detailOrder.materials || []).map(function (item) {
-        return '<li><span>' + esc(item.name) + '</span><strong>' + esc(item.qty) + ' ' + esc(item.unit) + '</strong></li>';
+        return '<li><span>' + esc(item.name) + '</span><strong>' + esc(Math.round(item.qty * detailOrder.qty * 1000) / 1000) + ' ' + esc(item.unit) + '</strong></li>';
       }).join('') + '</ul>';
       target.hidden = false;
       $('ordViewBom').textContent = 'Hide BOM';
@@ -420,19 +296,72 @@
       $('ordViewBom').textContent = 'View BOM';
     }
   });
-  $('ordCancel').addEventListener('click', function () {
-    if (!demo || !detailOrder) return;
-    var previousStatus = detailOrder.status;
-    detailOrder.status = 'Cancelled';
-    if (!save()) { detailOrder.status = previousStatus; return; }
-    closeModal('ordDetailModal'); render(); notify(detailOrder.id + ' cancelled.');
+  $('ordAdvance').addEventListener('click', function () {
+    if (!detailOrder || !nextStatus[detailOrder.status]) return;
+    const paid = store.paidCents(data.payments, detailOrder.id);
+    if (detailOrder.status === 'Pending' && paid < store.cents(detailOrder.requiredDeposit || 0)) {
+      notify('Record the required deposit in Payments & Sales before starting production.');
+      return;
+    }
+    if (detailOrder.status === 'Completed' && paid < store.cents(detailOrder.total)) {
+      notify('Record the remaining payment before marking the order delivered.');
+      return;
+    }
+    const previous = {...detailOrder};
+    detailOrder.status = nextStatus[detailOrder.status];
+    if (detailOrder.status === 'Delivered') detailOrder.delivery = 'Delivered';
+    if (!store.save(data)) { Object.assign(detailOrder, previous); return; }
+    closeModal('ordDetailModal');
+    render();
+    notify(detailOrder.id + ' updated to ' + detailOrder.status + '.');
   });
+
+  $('ordCancel').addEventListener('click', function () {
+    if (!detailOrder || detailOrder.status !== 'Pending') return;
+    if (store.paidCents(data.payments, detailOrder.id) > 0) {
+      notify('This order has a recorded payment. The prototype has no refund workflow.');
+      return;
+    }
+    if (!confirm('Cancel ' + detailOrder.id + ' and release its reserved stock?')) return;
+    const released = [];
+    if (detailOrder.stockReserved) {
+      for (const item of detailOrder.materials) {
+        const material = materials.find(entry => entry.id === item.id);
+        if (!material || material.stock + item.qty * detailOrder.qty > 100000) {
+          notify('Inventory could not accept the returned stock. Review the material balance.');
+          return;
+        }
+        released.push({material, stock:material.stock, qty:item.qty * detailOrder.qty});
+      }
+    }
+    released.forEach(entry => store.movement(data, entry.material, detailOrder.id + ' cancelled', entry.qty));
+    const reserved = detailOrder.stockReserved;
+    const previousDelivery = detailOrder.delivery;
+    detailOrder.status = 'Cancelled';
+    detailOrder.delivery = 'Cancelled';
+    detailOrder.stockReserved = false;
+    if (!store.save(data)) {
+      detailOrder.status = 'Pending';
+      detailOrder.delivery = previousDelivery;
+      detailOrder.stockReserved = reserved;
+      released.forEach(entry => { entry.material.stock = entry.stock; });
+      data.inventoryHistory.splice(0, released.length);
+      return;
+    }
+    closeModal('ordDetailModal');
+    render();
+    notify(detailOrder.id + ' cancelled.');
+  });
+
   $('ordArchive').addEventListener('click', function () {
-    if (!demo || !detailOrder) return;
+    if (!detailOrder || !['Cancelled', 'Delivered'].includes(detailOrder.status)) return;
     detailOrder.archived = true;
-    if (!save()) { detailOrder.archived = false; return; }
-    closeModal('ordDetailModal'); activeGroup = 'archived'; render(); notify(detailOrder.id + ' archived.');
+    if (!store.save(data)) { detailOrder.archived = false; return; }
+    closeModal('ordDetailModal');
+    activeGroup = 'archived';
+    render();
   });
 
   render();
+  if (new URLSearchParams(location.search).get('action') === 'new') $('ordNew').click();
 })();

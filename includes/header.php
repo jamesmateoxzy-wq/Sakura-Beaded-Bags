@@ -52,7 +52,7 @@ $nav = [
   <?php if ($pageCss): ?><link rel="stylesheet" href="../assets/css/<?= e($pageCss) ?>"><?php endif; ?>
     <link rel="stylesheet" href="../assets/css/responsive.css">
 </head>
-<body<?= $pageBodyClass ? ' class="' . e($pageBodyClass) . '"' : '' ?>>
+<body data-admin-id="<?= e($_SESSION['user_id']) ?>"<?= $pageBodyClass ? ' class="' . e($pageBodyClass) . '"' : '' ?>>
 <div class="app">
 
   <!-- ===== Sidebar ===== -->

@@ -12,6 +12,7 @@ $pageJs = $pageJs ?? '';
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
 <script src="../assets/js/main.js"></script>
+<script src="../assets/js/store.js"></script>
 <?php if ($pageJs): ?><script src="../assets/js/<?= e($pageJs) ?>"></script><?php endif; ?>
 </body>
 </html>

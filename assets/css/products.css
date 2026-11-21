@@ -639,3 +639,5 @@
     padding: 9px 12px;
   }
 }
+
+.prod-toolbar, .target-row .actions { flex-wrap: wrap; }

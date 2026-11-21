@@ -3,77 +3,16 @@
   'use strict';
   var root = document.getElementById('operationsPage');
   if (!root || root.dataset.module !== 'inventory') return;
-  var demo = root.dataset.demo === '1';
   var $ = function (id) { return document.getElementById(id); };
-  var key = 'sakura-operations-v1';
-  var storageUnavailable = false;
-  var storageFailureReported = false;
-  var samples = [
-    { id:'MAT-001', name:'Pink Beads', unit:'pcs', cost:2, stock:10, min:50 },
-    { id:'MAT-002', name:'Nylon Thread', unit:'roll', cost:40, stock:3, min:5 },
-    { id:'MAT-003', name:'Bag Handles', unit:'pcs', cost:55, stock:5, min:10 },
-    { id:'MAT-004', name:'Rose Crystal Beads', unit:'pcs', cost:2, stock:600, min:100 },
-    { id:'MAT-005', name:'Ivory Pearl Beads', unit:'pcs', cost:3, stock:450, min:100 },
-    { id:'MAT-006', name:'Clasps', unit:'pcs', cost:30, stock:4, min:10 },
-    { id:'MAT-007', name:'Pink Ribbon', unit:'roll', cost:25, stock:2, min:5 }
-  ];
-  var sampleHistory = [
-    { material:'Rose Crystal Beads', date:'2026-10-28', activity:'Stock-In', delta:200, unit:'pcs' },
-    { material:'Rose Crystal Beads', date:'2026-10-28', activity:'ORD-002', delta:-100, unit:'pcs' },
-    { material:'Bag Handles', date:'2026-10-27', activity:'Correction', delta:-2, unit:'pcs' }
-  ];
+  var store = window.SakuraStore;
+  var data = store.read();
+  var materials = data.materials;
+  var history = data.inventoryHistory;
 
-  function clone(value) { return JSON.parse(JSON.stringify(value)); }
   function materialValue(list) {
-    return list.reduce(function (sum, material) {
-      return sum + Number(material.stock || 0) * Number(material.cost || 0);
-    }, 0);
+    return list.reduce((sum, material) => sum + store.cents(material.stock * material.cost), 0) / 100;
   }
-  function reportStorageFailure() {
-    if (storageFailureReported) return;
-    storageFailureReported = true;
-    notify('Could not read or save demo inventory changes in this browser session.');
-  }
-  function load() {
-    if (!demo) return { materials:[], history:[], stockInCount:0, valueOffset:0 };
-    try {
-      var stored = JSON.parse(sessionStorage.getItem(key) || '{}');
-      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
-      var materials = Array.isArray(stored.materials) ? stored.materials : clone(samples);
-      return {
-        materials:materials,
-        history:Array.isArray(stored.inventoryHistory) ? stored.inventoryHistory : clone(sampleHistory),
-        stockInCount:Number.isInteger(stored.inventoryStockInCount) ? stored.inventoryStockInCount : 12,
-        valueOffset:Number.isFinite(stored.inventoryValueOffset) ? stored.inventoryValueOffset : 8450 - materialValue(materials)
-      };
-    } catch (error) {
-      storageUnavailable = true;
-      reportStorageFailure();
-      return {
-        materials:clone(samples),
-        history:clone(sampleHistory),
-        stockInCount:12,
-        valueOffset:8450 - materialValue(samples)
-      };
-    }
-  }
-  function save() {
-    if (!demo || storageUnavailable) return false;
-    try {
-      var stored = JSON.parse(sessionStorage.getItem(key) || '{}');
-      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
-      stored.materials = materials;
-      stored.inventoryHistory = history;
-      stored.inventoryStockInCount = stockInCount;
-      stored.inventoryValueOffset = valueOffset;
-      sessionStorage.setItem(key, JSON.stringify(stored));
-      return true;
-    } catch (error) {
-      storageUnavailable = true;
-      reportStorageFailure();
-      return false;
-    }
-  }
+
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
@@ -81,9 +20,6 @@
   }
   function money(value) {
     return '₱' + Number(value || 0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
-  }
-  function moneyWhole(value) {
-    return '₱' + Number(value || 0).toLocaleString('en-PH', {maximumFractionDigits:0});
   }
   function stockStatus(material) {
     return material.stock === 0 ? 'Out of Stock' : material.stock <= material.min ? 'Low Stock' : 'In Stock';
@@ -103,31 +39,10 @@
     field.hidden = !message;
   }
   function formatDate(value) {
-    var parsed = new Date(value);
+    var parsed = new Date(value + 'T00:00:00');
     if (Number.isNaN(parsed.getTime())) return value;
     return parsed.toLocaleDateString('en-US', {month:'short', day:'numeric'});
   }
-  function inputDate(value) {
-    var parsed = new Date(value);
-    if (Number.isNaN(parsed.getTime())) return '';
-    return parsed.getFullYear() + '-' + String(parsed.getMonth() + 1).padStart(2, '0') + '-' +
-      String(parsed.getDate()).padStart(2, '0');
-  }
-  function appendHistory(material, activity, delta, date) {
-    history.unshift({
-      material:material.name,
-      date:date,
-      activity:activity,
-      delta:delta,
-      unit:material.unit
-    });
-  }
-
-  var loaded = load();
-  var materials = loaded.materials;
-  var history = loaded.history;
-  var stockInCount = loaded.stockInCount;
-  var valueOffset = loaded.valueOffset;
   var historyExpanded = false;
 
   function updateMaterialOptions(select, selectedId) {
@@ -160,10 +75,14 @@
     var shown = materials.filter(function (material) {
       return !query || (material.id + ' ' + material.name).toLowerCase().includes(query);
     });
-    $('invTotal').textContent = demo ? '24' : materials.length;
+    $('invTotal').textContent = materials.length;
+    $('invOpenStockIn').disabled = !materials.length;
+    $('invOpenCorrection').disabled = !materials.length;
     $('invLow').textContent = materials.filter(function (material) { return material.stock <= material.min; }).length;
-    $('invValue').textContent = moneyWhole(materialValue(materials) + valueOffset);
-    $('invStockInCount').textContent = stockInCount;
+    $('invValue').textContent = money(materialValue(materials));
+    const month = store.today().slice(0, 7);
+    $('invStockInCount').textContent = history.filter(entry => entry.activity === 'Stock-In' &&
+      entry.date.startsWith(month)).length;
     $('invRows').innerHTML = shown.map(function (material) {
       return '<tr><td>' + esc(material.id) + '</td><td>' + esc(material.name) + '</td><td>' +
         esc(material.unit) + '</td><td>' + money(material.cost) + '</td><td>' + material.stock +
@@ -184,7 +103,7 @@
     var quantity = Number($('invStockInQty').value);
     var cost = Number($('invStockInCost').value);
     var current = Number(material.stock);
-    var newBalance = current + (Number.isFinite(quantity) ? quantity : 0);
+    var newBalance = Math.round((current + (Number.isFinite(quantity) ? quantity : 0)) * 1000) / 1000;
     var receivedValue = (Number.isFinite(quantity) ? quantity : 0) * (Number.isFinite(cost) ? cost : 0);
     $('invCurrentBalance').textContent = current + ' ' + material.unit;
     $('invStockInUnit').textContent = material.unit;
@@ -198,19 +117,20 @@
     $('invAdjustBalance').textContent = material ? material.stock + ' ' + material.unit : '—';
   }
   function openStockIn() {
-    if (!demo) return;
+    if (!materials.length) { notify('Register a material in Product Costing & Pricing first.'); return; }
     $('invStockInForm').reset();
     showError('invStockInError', '');
     updateMaterialOptions($('invStockInMaterial'), materials[0] && materials[0].id);
     var material = materials[0];
-    $('invStockInQty').value = '200';
+    $('invStockInQty').value = '';
     $('invStockInCost').value = material ? Number(material.cost).toFixed(2) : '0.00';
-    $('invStockInDate').value = 'Oct 28, 2026';
+    $('invStockInDate').value = store.today();
+    $('invStockInDate').max = store.today();
     updateStockInSummary();
     openModal('invStockInModal');
   }
   function openCorrection() {
-    if (!demo) return;
+    if (!materials.length) { notify('Register a material in Product Costing & Pricing first.'); return; }
     $('invAdjustForm').reset();
     showError('invAdjustError', '');
     updateMaterialOptions($('invAdjustId'), materials[0] && materials[0].id);
@@ -235,7 +155,6 @@
     updateStockInSummary();
   });
   $('invStockInQty').addEventListener('input', updateStockInSummary);
-  $('invStockInCost').addEventListener('input', updateStockInSummary);
   $('invStockInModal').addEventListener('click', function (event) {
     var button = event.target.closest('[data-focus]');
     if (button) $(button.getAttribute('data-focus')).focus();
@@ -244,31 +163,23 @@
     event.preventDefault();
     var material = getMaterial($('invStockInMaterial').value);
     var quantity = Number($('invStockInQty').value);
-    var cost = Number($('invStockInCost').value);
-    var date = inputDate($('invStockInDate').value);
-    if (!material || !Number.isInteger(quantity) || quantity < 1 || !Number.isFinite(cost) ||
-        cost < 0 || cost > 1000000 || !date || material.stock + quantity > 1000000) {
-      showError('invStockInError', 'Enter a valid material, quantity, unit cost and date. Stock cannot exceed 1,000,000.');
+    var date = $('invStockInDate').value;
+    if (!material || !Number.isFinite(quantity) || quantity < 0.001 ||
+        !store.validDate(date) || date > store.today() || material.stock + quantity > 1000000) {
+      showError('invStockInError', 'Enter a valid material, quantity and date. Stock cannot exceed 1,000,000.');
       return;
     }
     var oldStock = material.stock;
-    var oldCost = material.cost;
-    var oldCount = stockInCount;
-    material.stock += quantity;
-    material.cost = cost;
-    stockInCount += 1;
-    appendHistory(material, 'Stock-In', quantity, date);
-    if (!save()) {
+    store.movement(data, material, 'Stock-In', quantity, date);
+    if (!store.save(data)) {
       material.stock = oldStock;
-      material.cost = oldCost;
-      stockInCount = oldCount;
       history.shift();
       showError('invStockInError', 'Could not save this Stock-In. Your changes were discarded.');
       return;
     }
     closeModal('invStockInModal');
     render();
-    notify('Stock-In saved to this demo session.');
+    notify('Stock-In saved.');
   });
   $('invAdjustId').addEventListener('change', updateCorrectionBalance);
   $('invAdjustForm').addEventListener('submit', function (event) {
@@ -277,15 +188,14 @@
     var quantity = Number($('invAdjustQty').value);
     var direction = $('invDirection').value;
     var delta = direction === 'in' ? quantity : -quantity;
-    if (!material || !Number.isInteger(quantity) || quantity < 1 ||
-        material.stock + delta < 0 || material.stock + delta > 1000000) {
+    if (!material || !Number.isFinite(quantity) || quantity < 0.001 ||
+        Math.round((material.stock + delta) * 1000) < 0 || material.stock + delta > 1000000) {
       showError('invAdjustError', 'Enter a valid quantity. Stock cannot become negative or exceed 1,000,000.');
       return;
     }
     var oldStock = material.stock;
-    material.stock += delta;
-    appendHistory(material, 'Correction', delta, new Date().toISOString().slice(0, 10));
-    if (!save()) {
+    store.movement(data, material, 'Correction', delta);
+    if (!store.save(data)) {
       material.stock = oldStock;
       history.shift();
       showError('invAdjustError', 'Could not save this correction. Your changes were discarded.');
@@ -293,8 +203,8 @@
     }
     closeModal('invAdjustModal');
     render();
-    notify('Stock correction saved to this demo session.');
+    notify('Stock correction saved.');
   });
   render();
-  if (demo && new URLSearchParams(window.location.search).get('action') === 'stockin') openStockIn();
+  if (new URLSearchParams(window.location.search).get('action') === 'stockin') openStockIn();
 })();
