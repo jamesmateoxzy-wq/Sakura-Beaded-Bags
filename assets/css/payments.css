@@ -1,0 +1,126 @@
+/* Payments & Sales — Sakura Phase 3 visual language */
+.payments-page { display: flex; width: 100%; max-width: 1560px; margin: 0 auto; flex-direction: column; gap: 22px; }
+.payments-page [hidden] { display: none !important; }
+.pay-mode-banner {
+  padding: 10px 14px;
+  border: 1px solid #efd4b6;
+  border-radius: 10px;
+  background: #fffaf0;
+  color: #775b41;
+  font-size: 13px;
+}
+.pay-mode-banner strong { font-weight: 600; }
+
+.pay-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.payments-page .pay-stat {
+  border: 1px solid var(--line); padding: 18px; min-width: 0;
+  box-shadow: var(--shadow); min-height: 122px;
+}
+.pay-stat-label { display: flex; justify-content: space-between; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+.pay-stat-symbol { color: var(--pink-500); font-size: 19px; font-weight: 400; }
+.pay-stat strong { display: block; font-weight: 600; font-size: clamp(24px, 2.15vw, 31px); line-height: 1.3; margin: 8px 0 5px; }
+.pay-stat small { color: var(--muted); font-size: 12px; }
+
+.payments-page .pay-transactions,
+.payments-page .pay-form-card,
+.payments-page .pay-slip-card { border: 1px solid var(--line); box-shadow: var(--shadow); }
+.payments-page .pay-transactions { padding: 20px; }
+.pay-section-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.pay-section-head h2, .pay-slip-heading h2 { font-size: 17px; font-weight: 600; }
+.pay-controls { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+.pay-search { min-width: 210px; border: 1px solid var(--line); border-radius: 10px; display: flex; background: white; }
+.pay-search:focus-within { border-color: var(--pink-400); box-shadow: 0 0 0 3px rgba(217, 102, 139, .14); }
+.pay-search::before { content: '⌕'; margin: 5px 0 0 10px; font-size: 20px; color: var(--muted); }
+.pay-search input { width: 220px; min-width: 0; border: 0; background: transparent; outline: 0; padding: 10px; font-size: 13px; }
+.payments-page .pay-filter { width: 150px; padding: 9px 10px; font-size: 13px; }
+.pay-record-shortcut { padding: 10px 14px; font-size: 13px; }
+.payments-page .btn:disabled { opacity: .54; cursor: not-allowed; }
+.payments-page .btn:disabled:hover { background: var(--pink-500); }
+.payments-page .pay-table { min-width: 1000px; font-size: 13px; }
+.pay-table th { padding: 12px 10px; font-size: 12px; }
+.pay-table td { padding: 12px 10px; white-space: nowrap; }
+.pay-table tbody tr:hover { background: #fffafa; }
+.pay-table tbody .pay-selected-row { background: #fef4f7; }
+.pay-table .badge { font-size: 11px; padding: 4px 9px; }
+.pay-table .pay-view-btn { font-size: 12px; padding: 7px 10px; }
+.pay-no-results { padding: 26px; text-align: center; font-size: 14px; color: var(--muted); }
+.pay-table-foot { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-top: 12px; color: var(--muted); font-size: 12px; }
+.pay-pagination { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pay-pagination button { color: var(--pink-600); padding: 6px 8px; font-size: 12px; border-radius: 6px; }
+.pay-pagination button[aria-current="page"] { background: var(--pink-50); font-weight: 700; }
+.pay-pagination button:disabled { opacity: .5; cursor: not-allowed; }
+
+.pay-bottom-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
+.payments-page .pay-form-card, .payments-page .pay-slip-card { min-width: 0; padding: 18px; }
+.pay-form-card .card-head { margin-bottom: 10px; }
+.pay-form-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 10px; row-gap: 8px; }
+.pay-form-grid .field { grid-column: span 2; margin-bottom: 0; }
+.pay-form-grid .field:nth-child(1), .pay-form-grid .field:nth-child(2) { grid-column: span 3; }
+.pay-form-grid .field label { font-weight: 400; font-size: 12.5px; color: var(--muted); }
+.pay-form-grid .field .input, .pay-form-grid .field .select { padding: 9px 10px; font-size: 13px; height: 42px; }
+.pay-form-grid .field input:disabled, .pay-form-grid .field select:disabled { background: #faf8f8; opacity: .7; }
+.pay-form-grid .pay-reference-field { grid-column: span 2; }
+.payments-page .req { color: var(--pink-500); }
+.pay-help { font-size: 12px; margin: 10px 0; color: var(--muted); }
+.pay-form-actions { margin-top: 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pay-form-actions > span { color: var(--muted); font-size: 12px; }
+.pay-form-actions .btn { min-height: 40px; font-size: 13px; padding: 9px 12px; white-space: nowrap; }
+.pay-error { border-radius: 10px; background: #fdecea; color: var(--danger); padding: 10px; margin-top: 8px; font-size: 12px; }
+
+.pay-slip-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.pay-slip-heading .btn { min-height: 40px; font-size: 12px; padding: 7px 11px; }
+.pay-slip-empty { padding: 50px 10px; color: var(--muted); text-align: center; font-size: 13px; }
+.pay-slip-meta { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 15px; }
+.pay-slip-meta > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pay-slip-meta strong { font-size: 13px; font-weight: 600; }
+.pay-slip-meta span { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.pay-slip-meta .pay-slip-meta-right { text-align: right; }
+.pay-slip-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; border-radius: 12px; background: var(--pink-50); padding: 16px; }
+.pay-slip-summary div { min-width: 0; }
+.pay-slip-summary small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+.pay-slip-summary strong { display: block; font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.pay-slip-note { margin-top: 10px; font-size: 12px; color: var(--muted); }
+.pay-slip-disclaimer { margin-top: 10px; font-size: 12px; color: #9a5d28; font-weight: 600; }
+.pay-screenreader {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+@media (max-width: 1230px) {
+  .pay-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pay-section-head { align-items: flex-start; flex-direction: column; }
+  .pay-controls { width: 100%; }
+}
+@media (max-width: 1000px) {
+  .pay-bottom-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 680px) {
+  .pay-stats { grid-template-columns: 1fr; gap: 12px; }
+  .payments-page .pay-stat { min-height: auto; }
+  .pay-section-head h2 { margin-bottom: 4px; }
+  .pay-search { flex: 1 1 100%; }
+  .pay-search input { width: 100%; }
+  .pay-filter { flex: 1 1 120px; }
+  .pay-record-shortcut { flex: 1 1 auto; }
+  .pay-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pay-form-grid .field, .pay-form-grid .field:nth-child(1), .pay-form-grid .field:nth-child(2), .pay-form-grid .pay-reference-field { grid-column: span 1; }
+  .pay-form-grid .pay-order-field, .pay-form-grid .pay-reference-field { grid-column: span 2 !important; }
+  .pay-form-actions, .pay-slip-meta { flex-direction: column; align-items: stretch; }
+  .pay-slip-meta .pay-slip-meta-right { text-align: left; }
+  .pay-slip-summary { gap: 8px; padding: 12px; }
+  .pay-slip-summary strong { font-size: 16px; }
+  .pay-table-foot { flex-direction: column; align-items: flex-start; }
+}
+@media print {
+  @page { size: A4 portrait; margin: 20mm; }
+  body, html { background: white !important; }
+  body * { visibility: hidden !important; }
+  #slipCard, #slipCard * { visibility: visible !important; }
+  #slipCard {
+    position: absolute !important; top: 0 !important; left: 0 !important;
+    width: 100% !important; padding: 20px !important; margin: 0 !important;
+    border: 1px solid #ddd !important; box-shadow: none !important;
+    break-inside: avoid;
+  }
+  #printSlip { display: none !important; }
+  #slipCard .pay-slip-summary { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
