@@ -76,9 +76,9 @@
   function renderRows(container, rows, changed) {
     container.innerHTML=rows.length?rows.map((r,i)=>{
       const mat=lookup(r.id); const cost=mat?mat.cost:r.cost; const sub=cost*Number(r.qty);
-      return '<div class="mat-row" data-i="'+i+'"><div class="mat-name">'+esc(r.name)+'</div>'+ 
-        '<label class="mat-cell"><span class="mat-label">Quantity</span><div class="qty-wrap"><input class="input" type="number" min="0.01" step="0.01" max="1000000" value="'+esc(r.qty)+'" data-qty aria-label="Quantity of '+esc(r.name)+'"><em>'+esc(r.unit)+'</em></div></label>'+ 
-        '<label class="mat-cell"><span class="mat-label">Unit cost (Inventory)</span><input class="input" type="number" readonly value="'+esc(cost)+'"></label>'+ 
+      return '<div class="mat-row" data-i="'+i+'"><div class="mat-name">'+esc(r.name)+'</div>'+
+        '<label class="mat-cell"><span class="mat-label">Quantity</span><div class="qty-wrap"><input class="input" type="number" min="0.01" step="0.01" max="1000000" value="'+esc(r.qty)+'" data-qty aria-label="Quantity of '+esc(r.name)+'"><em>'+esc(r.unit)+'</em></div></label>'+
+        '<label class="mat-cell"><span class="mat-label">Unit cost (Inventory)</span><input class="input" type="number" readonly value="'+esc(cost)+'"></label>'+
         '<div class="mat-sub"><span class="mat-label">Subtotal</span><b>'+pesos(sub)+'</b></div><button type="button" class="icon-btn" data-remove aria-label="Remove '+esc(r.name)+'"><svg class="icon" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>';
     }).join(''):'<p class="empty">No materials yet. Click “Add material”.</p>';
     container.oninput=e=>{const row=e.target.closest('.mat-row');if(!row||!e.target.matches('[data-qty]'))return;
