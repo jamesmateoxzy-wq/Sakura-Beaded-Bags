@@ -11,7 +11,7 @@ $pageTitle = 'Inventory Management';
 $pageSubtitle = 'Every bead accounted for, every bag ready to begin.';
 $activePage = 'inventory';
 $pageCss = 'inventory.css';
-$pageJs = 'inventory.js';
+$pageJs = 'inventory-live.js';
 $pageBodyClass = 'inventory-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
