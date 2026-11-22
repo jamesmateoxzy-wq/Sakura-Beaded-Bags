@@ -71,7 +71,7 @@ $pageTitle    = 'Product Costing & Pricing';
 $pageSubtitle = 'Thoughtful pricing for every handcrafted piece.';
 $activePage   = 'products';
 $pageCss      = 'products.css';
-$pageJs       = 'products.js';
+$pageJs = 'products-live.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 

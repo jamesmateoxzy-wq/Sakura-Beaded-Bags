@@ -26,7 +26,7 @@ $pageTitle = 'Payments & Sales';
 $pageSubtitle = 'A clear view of every payment and outstanding balance.';
 $activePage = 'payments';
 $pageCss = 'payments.css';
-$pageJs = 'payments.js';
+$pageJs = 'payments-live.js';
 
 require_once __DIR__ . '/../includes/header.php';
 ?>

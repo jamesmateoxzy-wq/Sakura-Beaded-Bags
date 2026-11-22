@@ -11,7 +11,7 @@ $pageTitle = 'Order Management';
 $pageSubtitle = 'Manage each order, from the first bead to delivery.';
 $activePage = 'orders';
 $pageCss = 'orders.css';
-$pageJs = 'orders.js';
+$pageJs = 'orders-live.js';
 $pageBodyClass = 'orders-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>

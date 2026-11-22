@@ -48,7 +48,7 @@ if (USE_SAMPLE_DATA) {
     }
     $updatedOn = date('F j, Y');
 }
-
+require_once __DIR__ . '/../includes/dashboard_live_data.php';
 $stats = [
     ['label' => 'Total Sales',     'value' => peso($totalSales), 'note' => $monthName . ' order value',           'icon' => 'wallet'],
     ['label' => 'Total Orders',    'value' => $totalOrders,      'note' => 'Orders placed in ' . $monthName,       'icon' => 'orders'],

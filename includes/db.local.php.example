@@ -1,0 +1,14 @@
+<?php
+/**
+ * LOCAL EXAMPLE ONLY. Copy to db.local.php and edit.
+ * Never commit the real db.local.php file (it is already ignored by SBB .gitignore).
+ * In default local XAMPP, root may have an empty password; check your setup.
+ * Use a separate restricted database user in production.
+ */
+return [
+    'host' => '127.0.0.1',
+    'port' => 3306,
+    'database' => 'sakura_beaded_bags',
+    'username' => 'root',
+    'password' => '',
+];

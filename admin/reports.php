@@ -11,7 +11,7 @@ $pageTitle = 'Financial Reports';
 $pageSubtitle = 'See how your boutique is growing, one bag at a time.';
 $activePage = 'reports';
 $pageCss = 'reports.css';
-$pageJs = 'reports.js';
+$pageJs = 'reports-live.js';
 $pageBodyClass = 'reports-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
