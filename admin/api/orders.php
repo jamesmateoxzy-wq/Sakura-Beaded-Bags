@@ -272,6 +272,12 @@ function ord_cancel(PDO $pdo, array $data): array {
         return ['ok' => true, 'message' => 'Order was already cancelled. No stock was changed.'];
     }
     if ($status !== 'Pending') throw new InvalidArgumentException('Only pending orders can be cancelled automatically.');
+    // Paid orders require an explicit refund workflow. Never restore stock automatically.
+    $paidQuery = $pdo->prepare('SELECT COUNT(*) FROM payments WHERE order_id = ?');
+    $paidQuery->execute([$orderId]);
+    if ((int) $paidQuery->fetchColumn() > 0) {
+        throw new InvalidArgumentException('This order has a recorded payment. Refund/void the payment before cancelling the order.');
+    }
     $stmt = $pdo->prepare("SELECT material_id, SUM(-quantity_change) AS used_qty
         FROM inventory_movements WHERE order_id = ? AND movement_type = 'Production Use'
         GROUP BY material_id ORDER BY material_id");
