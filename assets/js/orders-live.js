@@ -140,9 +140,9 @@
     syncProduct();
   }
   function archived(o) {
-    return o.archived || ['Completed', 'Cancelled'].includes(o.status) || o.delivery === 'Delivered';
+    return o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered';
   }
-  function currentProduction(o) { return !archived(o) && ['Pending','In Production','Ready'].includes(o.status); }
+  function currentProduction(o) { return !archived(o) && ['Pending','In Production','Ready','Completed'].includes(o.status); }
   function itemSummary(o) {
     return (o.items || []).map(function (v) { return v.product + ' ×' + v.qty; }).join(', ') || 'No items';
   }
@@ -153,7 +153,7 @@
       var inGroup = activeGroup === 'all' ||
         (activeGroup === 'production' && currentProduction(o)) ||
         (activeGroup === 'archived' && archived(o));
-      return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production')) &&
+      return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
     }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
     $('ordTotal').textContent = orders.length;
@@ -202,10 +202,62 @@
     $('ordDetailPayment').className = 'badge ' + badgeClass(o.payment);
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
-    $('ordCancel').disabled = o.status !== 'Pending';
-    $('ordArchive').disabled = !['Cancelled','Completed'].includes(o.status) || o.archived;
+    $('ordCancel').disabled = o.status !== 'Pending' || Number(o.paid) > 0;
+    $('ordArchive').disabled = !(o.status === 'Cancelled' || o.delivery === 'Delivered') || o.archived;
+    var actionText = statusAction(o);
+    advanceButton.hidden = !actionText || Boolean(o.archived);
+    advanceButton.disabled = busy || !actionText || Boolean(o.archived) ||
+      (o.status === 'Completed' && o.delivery !== 'Delivered' && Number(o.balance) > 0);
+    advanceButton.textContent = actionText || '';
+    advanceButton.title = (o.status === 'Completed' && Number(o.balance) > 0) ?
+      'Full payment must be recorded before delivery.' : '';
     openModal('ordDetailModal');
   }
+
+  // Add one action to the existing Order Details modal without replacing its PHP layout.
+  function statusAction(o) {
+    if (!o || o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered') return '';
+    if (o.status === 'Pending') return 'Start Production';
+    if (o.status === 'In Production' || o.status === 'Ready') return 'Mark Completed';
+    if (o.status === 'Completed') return 'Mark Delivered';
+    return '';
+  }
+  var advanceButton = document.createElement('button');
+  advanceButton.type = 'button';
+  advanceButton.id = 'ordAdvance';
+  advanceButton.className = 'btn btn-primary';
+  advanceButton.hidden = true;
+  var cancelButton = $('ordCancel');
+  cancelButton.parentNode.insertBefore(advanceButton, cancelButton);
+  advanceButton.addEventListener('click', async function () {
+    if (busy || !detailOrder || !statusAction(detailOrder)) return;
+    if (detailOrder.status === 'Completed' && Number(detailOrder.balance) > 0) {
+      notify('Full payment is required before delivery.'); return;
+    }
+    var before = detailOrder;
+    var label = statusAction(before);
+    if (!window.confirm(label + ' for ' + before.id + '?')) return;
+    busy = true;
+    advanceButton.disabled = true;
+    try {
+      var response = await submitAction({
+        action:'advance_order', orderId:before.rawId,
+        expectedProduction:before.status, expectedDelivery:before.delivery
+      });
+      closeModal('ordDetailModal');
+      detailOrder = null;
+      notify(response.message);
+      await loadData();
+      activeOrderId = before.id;
+      renderOrders();
+    } catch (error) {
+      notify(error.message);
+      // Do not trust stale state after a failed transition.
+      closeModal('ordDetailModal');
+      detailOrder = null;
+      try { await loadData(); } catch (reloadError) { notify(reloadError.message); }
+    } finally { busy = false; }
+  });
 
   // The BOM, labor, packaging and DP policy are owned by Products: read-only here.
   $('ordAddMaterial').disabled = true;
@@ -312,7 +364,7 @@
     finally { busy = false; }
   });
   $('ordArchive').addEventListener('click', async function () {
-    if (!detailOrder || busy || !['Cancelled','Completed'].includes(detailOrder.status)) return;
+    if (!detailOrder || busy || !(detailOrder.status === 'Cancelled' || detailOrder.delivery === 'Delivered')) return;
     busy = true; $('ordArchive').disabled = true;
     try {
       var result = await submitAction({action:'archive_order', orderId:detailOrder.rawId});

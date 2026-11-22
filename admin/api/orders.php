@@ -1,6 +1,6 @@
 <?php
 /**
- * SBB Orders MySQL API. GET catalog/orders; POST create/cancel/archive.
+ * SBB Orders MySQL API. GET catalog/orders; POST create/cancel/archive/advance.
  * Requires scripts/migrate_order_requests.php --apply for idempotency.
  * This prototype allocates/deducts BOM on creation and returns it on cancellation.
  * No customer payments are recorded here.
@@ -300,17 +300,88 @@ function ord_cancel(PDO $pdo, array $data): array {
     return ['ok' => true, 'message' => 'Order cancelled and its allocated materials were returned to inventory.'];
 }
 
+/**
+ * Advance exactly one stage, with a row lock and expected-state check.
+ * The client must include the state it last displayed. A repeated POST
+ * will fail rather than accidentally skipping another stage.
+ * Stock was already allocated when the order was created: never deduct again.
+ */
+function ord_advance(PDO $pdo, array $data): array {
+    $orderId = ord_id($data['orderId'] ?? null, 'order');
+    $expectedProduction = $data['expectedProduction'] ?? null;
+    $expectedDelivery = $data['expectedDelivery'] ?? null;
+    if (!is_string($expectedProduction) || !is_string($expectedDelivery)) {
+        throw new InvalidArgumentException('Order status changed. Refresh and retry.');
+    }
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare('SELECT production_status, delivery_status, archived_at
+        FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt->execute([$orderId]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) throw new InvalidArgumentException('Order not found.');
+    if ($row['archived_at'] !== null) throw new InvalidArgumentException('Archived orders cannot be advanced.');
+    $production = (string)$row['production_status'];
+    $delivery = (string)$row['delivery_status'];
+    if ($production !== $expectedProduction || $delivery !== $expectedDelivery) {
+        throw new InvalidArgumentException('The order status has already changed. Refresh and check the latest value.');
+    }
+    if ($production === 'Cancelled' || $delivery === 'Delivered' || $delivery === 'Returned') {
+        throw new InvalidArgumentException('This order cannot advance any further.');
+    }
+
+    $type = 'Production';
+    $oldStatus = $production;
+    if ($production === 'Pending') {
+        $newStatus = 'In Production';
+        $column = 'production_status';
+    } elseif ($production === 'In Production' || $production === 'Ready') {
+        $newStatus = 'Completed';
+        $column = 'production_status';
+    } elseif ($production === 'Completed') {
+        // Payments API takes the same order-row lock before recording money.
+        // These totals therefore cannot change concurrently with this check.
+        $totals = $pdo->prepare('SELECT COALESCE(SUM(quantity * unit_price), 0)
+            FROM order_items WHERE order_id = ?');
+        $totals->execute([$orderId]);
+        $total = (int) round((float)$totals->fetchColumn() * 100);
+        $paid = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE order_id = ?');
+        $paid->execute([$orderId]);
+        $received = (int) round((float)$paid->fetchColumn() * 100);
+        if ($total <= 0 || $received < $total) {
+            throw new InvalidArgumentException('Record full payment before marking this order Delivered.');
+        }
+        $newStatus = 'Delivered';
+        $oldStatus = $delivery;
+        $column = 'delivery_status';
+        $type = 'Delivery';
+    } else {
+        throw new InvalidArgumentException('Unsupported production status.');
+    }
+
+    // Column and new status are fixed constants from the controlled state machine.
+    $update = $pdo->prepare('UPDATE customer_orders SET ' . $column . ' = ? WHERE order_id = ?');
+    $update->execute([$newStatus, $orderId]);
+    $history = $pdo->prepare('INSERT INTO order_status_history
+        (order_id, status_type, old_status, new_status, notes) VALUES (?, ?, ?, ?, ?)');
+    $history->execute([$orderId, $type, $oldStatus, $newStatus, 'Updated from Orders management page']);
+    $pdo->commit();
+    return ['ok' => true, 'orderId' => sprintf('ORD-%03d', $orderId),
+        'status' => $type === 'Production' ? $newStatus : $production,
+        'delivery' => $type === 'Delivery' ? $newStatus : $delivery,
+        'message' => sprintf('Order %s updated to %s. Saved to MySQL.', sprintf('ORD-%03d', $orderId), $newStatus)];
+}
+
 function ord_archive(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
     $stmt = $pdo->prepare("UPDATE customer_orders SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)
-        WHERE order_id = ? AND production_status IN ('Cancelled','Completed')");
+        WHERE order_id = ? AND (production_status = 'Cancelled' OR delivery_status = 'Delivered')");
     $stmt->execute([$orderId]);
     if ($stmt->rowCount() < 1) {
         $stmt = $pdo->prepare('SELECT production_status, archived_at FROM customer_orders WHERE order_id = ?');
         $stmt->execute([$orderId]);
         $current = $stmt->fetch();
         if (!$current) throw new InvalidArgumentException('Order not found.');
-        if ($current['archived_at'] === null) throw new InvalidArgumentException('Only cancelled or completed orders can be archived.');
+        if ($current['archived_at'] === null) throw new InvalidArgumentException('Only cancelled or delivered orders can be archived.');
     }
     return ['ok' => true, 'message' => 'Order archived. No inventory changed.'];
 }
@@ -331,6 +402,7 @@ try {
     if ($action === 'create_order') ord_out(ord_create($pdo, $data), 201);
     if ($action === 'cancel_order') ord_out(ord_cancel($pdo, $data));
     if ($action === 'archive_order') ord_out(ord_archive($pdo, $data));
+    if ($action === 'advance_order') ord_out(ord_advance($pdo, $data));
     ord_fail('Unknown action.');
 } catch (InvalidArgumentException $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
