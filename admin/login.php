@@ -36,9 +36,15 @@ if (DEMO_MODE && isset($_GET['demo'])) {
 $error = substr($_GET['error'] ?? '', 0, 200);
 $notSetUp = GOOGLE_CLIENT_ID === '' || strpos(GOOGLE_CLIENT_ID, 'PASTE-') === 0;
 
-// absolute URL of the file Google sends the token to
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/google-callback.php';
+// Production uses the trusted configured HTTPS origin, never an untrusted Host header.
+// Local development keeps the existing 127.0.0.1:8000 callback behavior.
+if (SBB_BASE_URL !== '') {
+    $loginUri = SBB_BASE_URL . '/admin/google-callback.php';
+} else {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? '');
+    $loginUri = $scheme . '://' . $host . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/google-callback.php';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
