@@ -173,7 +173,6 @@
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ?
       'No orders match your search and filters.' : 'No orders yet. Create a new order to get started.';
-    $('ordAddMaterial').disabled = !demo;
     var currentOrders = orders.filter(function (order) {
       return !order.archived && (order.status === 'Pending' || order.status === 'In Progress');
     }).sort(function (a, b) { return a.date.localeCompare(b.date) || b.id.localeCompare(a.id); }).slice(0, 3);
@@ -350,17 +349,6 @@
     if (!button) return;
     currentBom.splice(Number(button.dataset.removeMaterial), 1);
     renderBom();
-  });
-  $('ordAddMaterial').addEventListener('click', function () {
-    if (!demo) return;
-    refreshMaterials();
-    var number = $('ordId').value;
-    $('ordMaterialContext').textContent = 'Adding to ' + number + ' · ' + selectedProduct().name;
-    renderMaterialOptions();
-    $('ordMaterialSelect').value = materials[0] ? materials[0].id : '';
-    $('ordMaterialQty').value = '1';
-    updateMaterialDialog();
-    openModal('ordMaterialModal');
   });
   $('ordMaterialSelect').addEventListener('change', function () {
     $('ordMaterialQty').value = '1';

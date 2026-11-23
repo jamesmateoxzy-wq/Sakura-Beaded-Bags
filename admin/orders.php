@@ -46,7 +46,6 @@ require_once __DIR__ . '/../includes/header.php';
           <option value="In Progress">Status: In Progress</option>
           <option value="Completed">Status: Completed</option>
           <option value="Delivered">Status: Delivered</option>
-          <option value="Cancelled">Status: Cancelled</option>
         </select>
       </label>
     </div>
@@ -72,11 +71,11 @@ require_once __DIR__ . '/../includes/header.php';
           <div class="order-create-grid order-create-middle">
             <div class="order-field order-field-product"><label for="ordProduct">Product *</label><div class="order-control"><select class="select" id="ordProduct" required></select><button type="button" class="mini-edit" data-focus="ordProduct" aria-label="Choose product"><?= icon('edit') ?></button></div></div>
             <div class="order-field"><label for="ordQty">Quantity *</label><div class="order-control"><input class="input" id="ordQty" type="number" min="1" max="1000" step="1" value="1" required><button type="button" class="mini-edit" data-focus="ordQty" aria-label="Edit quantity"><?= icon('edit') ?></button></div></div>
-            <div class="order-field"><label for="ordDueDate">Due date *</label><div class="order-control"><input class="input" id="ordDueDate" type="text" required><button type="button" class="mini-edit" data-focus="ordDueDate" aria-label="Edit due date"><?= icon('edit') ?></button></div></div>
+            <div class="order-field"><label for="ordDueDate">Due date *</label><input class="input" id="ordDueDate" type="date" required></div>
             <div class="order-field order-field-notes"><label for="ordNotes">Notes</label><div class="order-control"><textarea class="textarea" id="ordNotes" rows="2" placeholder="Add order notes"></textarea><button type="button" class="mini-edit" data-focus="ordNotes" aria-label="Edit notes"><?= icon('edit') ?></button></div></div>
           </div>
 
-          <div class="order-bom-head"><h3>Bill of Materials</h3><button type="button" class="btn btn-outline order-add-material" id="ordAddMaterial" <?= $isDemo ? '' : 'disabled' ?>><?= icon('plus') ?> Add Material</button></div>
+          <div class="order-bom-head"><div><h3>Bill of Materials</h3><p class="order-material-meta">Products sets the recipe, labor, packaging and down-payment policy. Orders use those saved values.</p></div></div>
           <div class="order-bom-wrap">
             <table class="order-bom-table"><thead><tr><th>Material</th><th>Qty</th><th>Unit cost</th><th>Subtotal</th><th></th></tr></thead><tbody id="ordBomRows"></tbody></table>
           </div>
@@ -137,7 +136,29 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="order-detail-total"><span>Total</span><strong id="ordDetailTotal">₱0</strong></div>
         <span id="ordDetailPayment" class="badge badge-green"></span>
       </div>
-      <div class="modal-foot order-detail-foot"><div><button type="button" class="btn btn-outline order-cancel-btn" id="ordCancel" <?= $isDemo ? '' : 'disabled' ?>>Cancel Order</button><button type="button" class="btn btn-outline" id="ordArchive" <?= $isDemo ? '' : 'disabled' ?>>Archive</button></div><button type="button" class="btn btn-primary" data-close-modal="ordDetailModal">Close</button></div>
+      <div class="modal-foot order-detail-foot"><div><button type="button" class="btn btn-outline order-cancel-btn" id="ordCancel">Cancel Order</button><button type="button" class="btn btn-outline" id="ordArchive">Archive</button></div><button type="button" class="btn btn-primary" data-close-modal="ordDetailModal">Close</button></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay order-overlay" id="ordStatusConfirmModal" role="dialog" aria-modal="true" aria-labelledby="ordStatusConfirmTitle">
+    <div class="modal order-modal order-confirm-modal">
+      <div class="modal-head order-dialog-head">
+        <div><h2 id="ordStatusConfirmTitle">Confirm status update</h2><p id="ordStatusConfirmOrder"></p></div>
+        <button type="button" class="icon-btn" data-close-modal="ordStatusConfirmModal" aria-label="Close"><?= icon('x') ?></button>
+      </div>
+      <div class="modal-body order-confirm-body">
+        <p class="order-confirm-message" id="ordStatusConfirmMessage"></p>
+        <div class="order-confirm-transition">
+          <div><small id="ordStatusFromLabel">Current status</small><strong id="ordStatusFrom"></strong></div>
+          <span aria-hidden="true">&rarr;</span>
+          <div><small id="ordStatusToLabel">New status</small><strong id="ordStatusTo"></strong></div>
+        </div>
+        <p class="order-confirm-note" id="ordStatusConfirmNote" hidden></p>
+      </div>
+      <div class="modal-foot order-dialog-foot order-confirm-foot">
+        <button type="button" class="btn btn-outline" id="ordStatusConfirmCancel" data-close-modal="ordStatusConfirmModal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="ordStatusConfirmAccept">Confirm</button>
+      </div>
     </div>
   </div>
 </section>

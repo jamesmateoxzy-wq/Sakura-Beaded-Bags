@@ -13,6 +13,7 @@
   var detailOrder = null;
   var currentBom = [];
   var busy = false;
+  var pendingOrderAction = '';
   var requestKey = '';
   var ready = false;
 
@@ -140,9 +141,12 @@
     syncProduct();
   }
   function archived(o) {
-    return o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered';
+    return Boolean(o.archived);
   }
-  function currentProduction(o) { return !archived(o) && ['Pending','In Production','Ready','Completed'].includes(o.status); }
+  function currentProduction(o) {
+    return !archived(o) && o.delivery !== 'Delivered' &&
+      ['Pending','In Production','Ready','Completed','Cancelled'].includes(o.status);
+  }
   function itemSummary(o) {
     return (o.items || []).map(function (v) { return v.product + ' ×' + v.qty; }).join(', ') || 'No items';
   }
@@ -150,13 +154,15 @@
     var query = $('ordSearch').value.trim().toLowerCase();
     var filter = $('ordFilter').value;
     var shown = orders.filter(function (o) {
-      var inGroup = activeGroup === 'all' ||
+      var inGroup = (activeGroup === 'all' && !archived(o)) ||
         (activeGroup === 'production' && currentProduction(o)) ||
         (activeGroup === 'archived' && archived(o));
       return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
     }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
-    $('ordTotal').textContent = orders.length;
+    $('ordTotal').textContent = orders.filter(function (o) {
+      return !archived(o);
+    }).length;
     $('ordProduction').textContent = orders.filter(currentProduction).length;
     $('ordRows').innerHTML = shown.map(function (o) {
       return '<tr data-view="' + esc(o.id) + '"><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
@@ -202,21 +208,20 @@
     $('ordDetailPayment').className = 'badge ' + badgeClass(o.payment);
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
-    $('ordCancel').disabled = o.status !== 'Pending' || Number(o.paid) > 0;
-    $('ordArchive').disabled = !(o.status === 'Cancelled' || o.delivery === 'Delivered') || o.archived;
+    $('ordCancel').disabled = Boolean(o.archived) || o.status === 'Cancelled' ||
+      o.delivery === 'Delivered' || o.delivery === 'Returned' || Number(o.paid) > 0;
+    $('ordArchive').disabled = Boolean(o.archived);
     var actionText = statusAction(o);
     advanceButton.hidden = !actionText || Boolean(o.archived);
-    advanceButton.disabled = busy || !actionText || Boolean(o.archived) ||
-      (o.status === 'Completed' && o.delivery !== 'Delivered' && Number(o.balance) > 0);
+    advanceButton.disabled = busy || !actionText || Boolean(o.archived);
     advanceButton.textContent = actionText || '';
-    advanceButton.title = (o.status === 'Completed' && Number(o.balance) > 0) ?
-      'Full payment must be recorded before delivery.' : '';
+    advanceButton.title = '';
     openModal('ordDetailModal');
   }
 
-  // Add one action to the existing Order Details modal without replacing its PHP layout.
+  // Status and record actions share the branded confirmation modal.
   function statusAction(o) {
-    if (!o || o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered') return '';
+    if (!o || o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered' || o.delivery === 'Returned') return '';
     if (o.status === 'Pending') return 'Start Production';
     if (o.status === 'In Production' || o.status === 'Ready') return 'Mark Completed';
     if (o.status === 'Completed') return 'Mark Delivered';
@@ -229,44 +234,121 @@
   advanceButton.hidden = true;
   var cancelButton = $('ordCancel');
   cancelButton.parentNode.insertBefore(advanceButton, cancelButton);
-  advanceButton.addEventListener('click', async function () {
-    if (busy || !detailOrder || !statusAction(detailOrder)) return;
-    if (detailOrder.status === 'Completed' && Number(detailOrder.balance) > 0) {
-      notify('Full payment is required before delivery.'); return;
-    }
+  function openOrderActionConfirmation(action) {
+    if (busy || !detailOrder) return;
     var before = detailOrder;
-    var label = statusAction(before);
-    if (!window.confirm(label + ' for ' + before.id + '?')) return;
+    var isDelivery = action === 'Mark Delivered';
+    var isCancel = action === 'Cancel Order';
+    var isArchive = action === 'Archive';
+    var isStatusUpdate = !isCancel && !isArchive;
+    if (isStatusUpdate && statusAction(before) !== action) return;
+
+    pendingOrderAction = action;
+    $('ordStatusConfirmTitle').textContent = action + '?';
+    $('ordStatusConfirmOrder').textContent = before.id;
+    $('ordStatusFromLabel').textContent = isDelivery ? 'Current delivery status' : 'Current production status';
+    $('ordStatusFrom').textContent = isDelivery ? before.delivery : before.status;
+    $('ordStatusToLabel').textContent = isArchive ? 'Order record' :
+      (isDelivery ? 'New delivery status' : 'New production status');
+    $('ordStatusTo').textContent = isArchive ? 'Archived' :
+      (isCancel ? 'Cancelled' : isDelivery ? 'Delivered' :
+        (action === 'Start Production' ? 'In Production' : 'Completed'));
+    if (isCancel) {
+      $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will remain in Production with the status Cancelled until archived.';
+    } else if (isArchive) {
+      $('ordStatusConfirmMessage').textContent = 'Move this order to the Archived tab? It will remain saved for history.';
+    } else {
+      $('ordStatusConfirmMessage').textContent = 'Confirm this status update for ' + before.id + '?';
+    }
+    var note = isDelivery && Number(before.balance) > 0
+      ? 'Outstanding balance: ' + money(before.balance) + '. Record full payment before marking this order delivered.'
+      : isDelivery ? 'Full payment is recorded. You can mark this order delivered.'
+      : isCancel && before.status === 'Pending' ? 'Reserved materials will be returned to inventory. Paid orders cannot be cancelled.'
+      : isCancel ? 'Materials already used in production will remain deducted. Paid orders cannot be cancelled.'
+      : '';
+    $('ordStatusConfirmNote').textContent = note;
+    $('ordStatusConfirmNote').hidden = !note;
+    $('ordStatusConfirmAccept').textContent = action;
+    openModal('ordStatusConfirmModal');
+    $('ordStatusConfirmCancel').focus();
+  }
+  advanceButton.addEventListener('click', function () {
+    if (!detailOrder) return;
+    openOrderActionConfirmation(statusAction(detailOrder));
+  });
+  $('ordStatusConfirmAccept').addEventListener('click', async function () {
+    if (busy || !detailOrder || !pendingOrderAction) return;
+    var before = detailOrder;
+    var action = pendingOrderAction;
+    if (action === 'Cancel Order' &&
+        (before.archived || !['Pending','In Production','Ready','Completed'].includes(before.status) ||
+         before.delivery === 'Delivered' || before.delivery === 'Returned' || Number(before.paid) > 0)) {
+      notify('Only unpaid, undelivered orders can be cancelled.');
+      return;
+    }
+    if (action === 'Archive' && before.archived) {
+      notify('This order is already archived.');
+      return;
+    }
+    if (['Start Production','Mark Completed','Mark Delivered'].indexOf(action) !== -1 &&
+        statusAction(before) !== action) {
+      notify('The order status changed. Refresh and retry.');
+      return;
+    }
+
+    var payload = {orderId:before.rawId};
+    if (action === 'Cancel Order') payload.action = 'cancel_order';
+    else if (action === 'Archive') payload.action = 'archive_order';
+    else {
+      payload.action = 'advance_order';
+      payload.expectedProduction = before.status;
+      payload.expectedDelivery = before.delivery;
+    }
     busy = true;
     advanceButton.disabled = true;
+    $('ordCancel').disabled = true;
+    $('ordArchive').disabled = true;
+    $('ordStatusConfirmAccept').disabled = true;
     try {
-      var response = await submitAction({
-        action:'advance_order', orderId:before.rawId,
-        expectedProduction:before.status, expectedDelivery:before.delivery
-      });
+      var response = await submitAction(payload);
+      closeModal('ordStatusConfirmModal');
       closeModal('ordDetailModal');
       detailOrder = null;
       notify(response.message);
+      if (action === 'Archive') {
+        activeGroup = 'archived';
+        $('ordSearch').value = '';
+        $('ordFilter').value = 'all';
+      } else if (action === 'Cancel Order') {
+        activeGroup = 'production';
+        $('ordSearch').value = '';
+        $('ordFilter').value = 'all';
+      }
       await loadData();
-      activeOrderId = before.id;
-      renderOrders();
+      if (action !== 'Cancel Order' && action !== 'Archive') {
+        activeOrderId = before.id;
+        renderOrders();
+      }
     } catch (error) {
       notify(error.message);
       // Do not trust stale state after a failed transition.
+      closeModal('ordStatusConfirmModal');
       closeModal('ordDetailModal');
       detailOrder = null;
       try { await loadData(); } catch (reloadError) { notify(reloadError.message); }
-    } finally { busy = false; }
+    } finally {
+      busy = false;
+      pendingOrderAction = '';
+      advanceButton.disabled = false;
+      $('ordCancel').disabled = false;
+      $('ordArchive').disabled = false;
+      $('ordStatusConfirmAccept').disabled = false;
+    }
   });
 
   // The BOM, labor, packaging and DP policy are owned by Products: read-only here.
-  $('ordAddMaterial').disabled = true;
   $('ordMaterialAdd').disabled = true;
   ['ordLabor','ordPackaging','ordDpPolicy'].forEach(function (id) { $(id).readOnly = true; });
-  var hint = document.createElement('p');
-  hint.className = 'order-material-meta';
-  hint.textContent = 'Products sets the recipe, labor, packaging and down-payment policy. Orders use those saved values.';
-  $('ordAddMaterial').parentNode.appendChild(hint);
   $('ordNew').disabled = true;
   $('ordCancel').disabled = true;
   $('ordArchive').disabled = true;
@@ -351,30 +433,15 @@
     } else { target.hidden = true; $('ordViewBom').textContent = 'View BOM'; }
   });
   $('ordCancel').addEventListener('click', async function () {
-    if (!detailOrder || detailOrder.status !== 'Pending' || busy) return;
-    if (!window.confirm('Cancel ' + detailOrder.id + '? The allocated materials will be returned to Inventory.')) return;
-    busy = true; $('ordCancel').disabled = true;
-    try {
-      var result = await submitAction({action:'cancel_order', orderId:detailOrder.rawId});
-      closeModal('ordDetailModal');
-      notify(result.message);
-      detailOrder = null;
-      await loadData();
-    } catch (error) { notify(error.message); $('ordCancel').disabled = false; }
-    finally { busy = false; }
+    if (!detailOrder || busy || detailOrder.archived ||
+        !['Pending','In Production','Ready','Completed'].includes(detailOrder.status) ||
+        detailOrder.delivery === 'Delivered' || detailOrder.delivery === 'Returned' ||
+        Number(detailOrder.paid) > 0) return;
+    openOrderActionConfirmation('Cancel Order');
   });
   $('ordArchive').addEventListener('click', async function () {
-    if (!detailOrder || busy || !(detailOrder.status === 'Cancelled' || detailOrder.delivery === 'Delivered')) return;
-    busy = true; $('ordArchive').disabled = true;
-    try {
-      var result = await submitAction({action:'archive_order', orderId:detailOrder.rawId});
-      closeModal('ordDetailModal');
-      notify(result.message);
-      activeGroup = 'archived';
-      detailOrder = null;
-      await loadData();
-    } catch (error) { notify(error.message); $('ordArchive').disabled = false; }
-    finally { busy = false; }
+    if (!detailOrder || busy || detailOrder.archived) return;
+    openOrderActionConfirmation('Archive');
   });
   if ($('ordExport')) $('ordExport').addEventListener('click', function () {
     var rows = [['Order ID','Date','Customer','Product','Total PHP','Production','Delivery','Payment']].concat(

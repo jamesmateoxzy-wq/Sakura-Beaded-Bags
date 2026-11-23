@@ -263,41 +263,54 @@ function ord_create(PDO $pdo, array $data): array {
 function ord_cancel(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare('SELECT production_status FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt = $pdo->prepare('SELECT production_status, delivery_status, archived_at
+        FROM customer_orders WHERE order_id = ? FOR UPDATE');
     $stmt->execute([$orderId]);
-    $status = $stmt->fetchColumn();
-    if ($status === false) throw new InvalidArgumentException('Order not found.');
+    $order = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$order) throw new InvalidArgumentException('Order not found.');
+    $status = (string) $order['production_status'];
     if ($status === 'Cancelled') {
         $pdo->commit();
-        return ['ok' => true, 'message' => 'Order was already cancelled. No stock was changed.'];
+        return ['ok' => true, 'message' => 'Order is already marked Cancelled in Production.'];
     }
-    if ($status !== 'Pending') throw new InvalidArgumentException('Only pending orders can be cancelled automatically.');
+    if ($order['archived_at'] !== null) throw new InvalidArgumentException('Archived orders cannot be cancelled.');
+    if (in_array($order['delivery_status'], ['Delivered', 'Returned'], true)) {
+        throw new InvalidArgumentException('Delivered or returned orders cannot be cancelled.');
+    }
+    if (!in_array($status, ['Pending', 'In Production', 'Ready', 'Completed'], true)) {
+        throw new InvalidArgumentException('This order cannot be cancelled.');
+    }
     // Paid orders require an explicit refund workflow. Never restore stock automatically.
     $paidQuery = $pdo->prepare('SELECT COUNT(*) FROM payments WHERE order_id = ?');
     $paidQuery->execute([$orderId]);
     if ((int) $paidQuery->fetchColumn() > 0) {
         throw new InvalidArgumentException('This order has a recorded payment. Refund/void the payment before cancelling the order.');
     }
-    $stmt = $pdo->prepare("SELECT material_id, SUM(-quantity_change) AS used_qty
-        FROM inventory_movements WHERE order_id = ? AND movement_type = 'Production Use'
-        GROUP BY material_id ORDER BY material_id");
-    $stmt->execute([$orderId]);
-    $materials = $stmt->fetchAll();
-    $addBack = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?');
-    $record = $pdo->prepare("INSERT INTO inventory_movements
-        (material_id, order_id, movement_type, quantity_change, note)
-        VALUES (?, ?, 'Return', ?, 'Restored when pending order was cancelled')");
-    foreach ($materials as $r) {
-        $qty = number_format((float) $r['used_qty'], 2, '.', '');
-        if ((float) $qty <= 0) continue;
-        $addBack->execute([$qty, (int) $r['material_id']]);
-        if ($addBack->rowCount() !== 1) throw new RuntimeException('Could not restore material stock.');
-        $record->execute([(int) $r['material_id'], $orderId, $qty]);
+    if ($status === 'Pending') {
+        $stmt = $pdo->prepare("SELECT material_id, SUM(-quantity_change) AS used_qty
+            FROM inventory_movements WHERE order_id = ? AND movement_type = 'Production Use'
+            GROUP BY material_id ORDER BY material_id");
+        $stmt->execute([$orderId]);
+        $materials = $stmt->fetchAll();
+        $addBack = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?');
+        $record = $pdo->prepare("INSERT INTO inventory_movements
+            (material_id, order_id, movement_type, quantity_change, note)
+            VALUES (?, ?, 'Return', ?, 'Restored when pending order was cancelled')");
+        foreach ($materials as $r) {
+            $qty = number_format((float) $r['used_qty'], 2, '.', '');
+            if ((float) $qty <= 0) continue;
+            $addBack->execute([$qty, (int) $r['material_id']]);
+            if ($addBack->rowCount() !== 1) throw new RuntimeException('Could not restore material stock.');
+            $record->execute([(int) $r['material_id'], $orderId, $qty]);
+        }
     }
     $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled' WHERE order_id = ?");
     $stmt->execute([$orderId]);
     $pdo->commit();
-    return ['ok' => true, 'message' => 'Order cancelled and its allocated materials were returned to inventory.'];
+    $message = $status === 'Pending'
+        ? 'Order marked Cancelled in Production. Reserved materials were returned to inventory.'
+        : 'Order marked Cancelled in Production. Materials already used were not returned to inventory.';
+    return ['ok' => true, 'message' => $message];
 }
 
 /**
@@ -374,14 +387,14 @@ function ord_advance(PDO $pdo, array $data): array {
 function ord_archive(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
     $stmt = $pdo->prepare("UPDATE customer_orders SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)
-        WHERE order_id = ? AND (production_status = 'Cancelled' OR delivery_status = 'Delivered')");
+        WHERE order_id = ?");
     $stmt->execute([$orderId]);
     if ($stmt->rowCount() < 1) {
         $stmt = $pdo->prepare('SELECT production_status, archived_at FROM customer_orders WHERE order_id = ?');
         $stmt->execute([$orderId]);
         $current = $stmt->fetch();
         if (!$current) throw new InvalidArgumentException('Order not found.');
-        if ($current['archived_at'] === null) throw new InvalidArgumentException('Only cancelled or delivered orders can be archived.');
+        if ($current['archived_at'] === null) throw new RuntimeException('Order could not be archived.');
     }
     return ['ok' => true, 'message' => 'Order archived. No inventory changed.'];
 }
