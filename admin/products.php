@@ -221,7 +221,8 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="thumb thumb-sm no-img" id="nPhotoPreview" data-initial="+"></div>
             <div>
               <label class="btn btn-outline btn-sm" for="nPhoto"><?= icon('upload') ?> Choose photo</label>
-              <input type="file" id="nPhoto" accept="image/*" hidden>
+              <input type="file" id="nPhoto" accept="image/jpeg,image/png,image/webp" hidden>
+              <p class="hint">JPG, PNG or WebP. Maximum 4 MB.</p>
               <p class="hint" id="nPhotoName">No file chosen</p>
             </div>
           </div>
