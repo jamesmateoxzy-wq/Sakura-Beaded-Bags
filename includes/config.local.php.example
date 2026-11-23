@@ -1,0 +1,18 @@
+<?php
+/**
+ * Per-computer Google Sign-In settings.
+ *
+ * Copy this file to includes/config.local.php and edit that copy.
+ * The actual config.local.php is ignored by Git. Never commit it or your
+ * Google OAuth client secret / downloaded credentials JSON.
+ *
+ * A Google OAuth CLIENT ID is public and can be reused on every teammate's
+ * localhost installation. No CLIENT SECRET is used by this sign-in flow.
+ */
+return [
+    'google_client_id' => 'PASTE-YOUR-CLIENT-ID.apps.googleusercontent.com',
+    'allowed_admin_emails' => [
+        'your-email@gmail.com',
+        // 'another-approved-teammate@gmail.com',
+    ],
+];
