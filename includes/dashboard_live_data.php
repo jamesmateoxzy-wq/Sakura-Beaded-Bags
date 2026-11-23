@@ -8,13 +8,16 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/config.php';
 
 // The dashboard page itself includes header.php later, but do not run data
 // queries for visitors who are not signed in.
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-if (empty($_SESSION['user_id'])) {
+$sessionEmail = strtolower(trim((string) ($_SESSION['user_email'] ?? '')));
+if (empty($_SESSION['user_id']) || $_SESSION['user_id'] === 'demo'
+    || $sessionEmail === '' || !in_array($sessionEmail, ALLOWED_ADMIN_EMAILS, true)) {
     header('Location: login.php');
     exit;
 }

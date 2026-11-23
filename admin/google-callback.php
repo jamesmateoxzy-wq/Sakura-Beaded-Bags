@@ -23,14 +23,50 @@ $cookie = $_COOKIE['g_csrf_token'] ?? '';
 $body   = $_POST['g_csrf_token'] ?? '';
 if ($cookie === '' || !hash_equals($cookie, $body)) { fail('Sign-in could not be verified. Please try again.'); }
 
-// 2) Ask Google to validate the token
+// 2) Validate Google's signed ID token.
+// Production MUST use the official Google PHP client library (Composer vendor/).
+// Google's tokeninfo endpoint is only used for LOCAL debugging if the package
+// has not been installed. Never send production credentials to tokeninfo.
 $credential = $_POST['credential'] ?? '';
-if ($credential === '') { fail('No Google credential was received.'); }
+if (!is_string($credential) || $credential === '') {
+    fail('No Google credential was received.');
+}
+if (GOOGLE_CLIENT_ID === '' || ALLOWED_ADMIN_EMAILS === []) {
+    fail('Google sign-in has not been configured by the administrator.');
+}
 
-$ctx  = stream_context_create(['http' => ['timeout' => 8, 'ignore_errors' => true]]);
-$json = @file_get_contents('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($credential), false, $ctx);
-$info = $json ? json_decode($json, true) : null;
-if (!is_array($info) || empty($info['email'])) { fail('Google could not verify this sign-in.'); }
+$info = null;
+$autoload = __DIR__ . '/../vendor/autoload.php';
+if (is_file($autoload)) {
+    require_once $autoload;
+}
+if (class_exists(\Google\Client::class)) {
+    try {
+        $googleClient = new \Google\Client(['client_id' => GOOGLE_CLIENT_ID]);
+        $payload = $googleClient->verifyIdToken($credential);
+        if (is_array($payload)) {
+            $info = $payload;
+        }
+    } catch (Throwable $e) {
+        error_log('SBB Google token validation failed: ' . $e->getMessage());
+    }
+} elseif (SBB_ENV === 'development'
+    && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)) {
+    // LOCAL-ONLY fallback for teammates who have not installed Composer.
+    $ctx = stream_context_create(['http' => ['timeout' => 8, 'ignore_errors' => true]]);
+    $json = @file_get_contents(
+        'https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($credential),
+        false,
+        $ctx
+    );
+    $payload = $json ? json_decode($json, true) : null;
+    if (is_array($payload)) {
+        $info = $payload;
+    }
+}
+if (!is_array($info) || empty($info['email'])) {
+    fail('Google could not verify this sign-in. Check the server configuration.');
+}
 
 // 3) Make sure the token was made for OUR app and is still valid
 if (($info['aud'] ?? '') !== GOOGLE_CLIENT_ID)                                    { fail('This sign-in was not issued for this app.'); }

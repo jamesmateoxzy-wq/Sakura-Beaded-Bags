@@ -4,7 +4,7 @@ A college web-development project for Sakura Beaded Bags, built with **HTML, CSS
 
 ## Project status
 
-**Planning / beginning software development.** The team has completed UI/UX design and wireframes, prepared the database. Application coding has not started yet.
+**Development and integration/testing underway.** Admin pages, PHP APIs and a MySQL schema exist. Google Login and deployment require final security review and hosted testing.
 
 **Current project scope:** An **internal business management system**. The team will focus on the administration and business workflow; any later scope change should be confirmed with the professor or Product Owner.
 
@@ -25,14 +25,14 @@ A college web-development project for Sakura Beaded Bags, built with **HTML, CSS
 ## Repository structure
 
 ```text
-admin/           Admin interface and related PHP pages (to be implemented)
+admin/           Admin interface, authentication and PHP APIs
 assets/
   css/           Shared stylesheets
   js/            Shared JavaScript
   images/        Static website images
-includes/        Reusable PHP files and local configuration (later)
+includes/        Reusable PHP files and ignored local configuration
 database/        SQL schema and database setup documentation
-docs/            Requirements, planning, and team workflow notes
+docs/            Requirements, team workflow, Google Login and deployment preparation notes
 ```
 
 ## Team
@@ -44,3 +44,12 @@ Team Members
 - Ragos, Michelle
 - Sy, John Gabriel
 - Tribo, Maika
+
+## Google Login and deployment preparation
+
+- [Google Login setup for teammates](docs/GOOGLE_LOGIN_TEAM_SETUP.md)
+- [GitHub and production deployment preparation checklist](docs/DEPLOYMENT_PREP.md)
+- [HelioHost Johnny free staging deployment guide (current choice)](docs/HELIOHOST_STAGING.md)
+- [alwaysdata setup (alternate provider, currently not selected)](docs/ALWAYSDATA_STAGING.md)
+
+`main` is not deployed automatically. The documentation describes the steps still required before deploying.

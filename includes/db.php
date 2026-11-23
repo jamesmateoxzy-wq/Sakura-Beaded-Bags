@@ -1,30 +1,44 @@
 <?php
 /**
- * Shared PDO connection for Sakura Beaded Bags.
- * Safe to commit: credentials live only in ignored db.local.php.
+ * Sakura MySQL PDO connection. Credentials are never committed.
+ *
+ * Local: ignored includes/db.local.php.
+ * Hosting: SBB_DB_HOST, SBB_DB_PORT, SBB_DB_NAME, SBB_DB_USER,
+ *          SBB_DB_PASSWORD environment variables.
  */
 function sbb_db(): PDO
 {
     static $connection = null;
-
     if ($connection instanceof PDO) {
         return $connection;
     }
 
-    $localConfig = __DIR__ . '/db.local.php';
-    if (!is_file($localConfig)) {
-        throw new RuntimeException('Missing includes/db.local.php. Copy db.local.php.example and edit the values.');
-    }
-    $config = require $localConfig;
-    if (!is_array($config)) {
-        throw new RuntimeException('Database configuration must return an array.');
+    $localPath = __DIR__ . '/db.local.php';
+    $localConfig = is_file($localPath) ? require $localPath : [];
+    if (!is_array($localConfig)) {
+        throw new RuntimeException('includes/db.local.php must return an array.');
     }
 
-    $host = $config['host'] ?? '127.0.0.1';
-    $port = (int) ($config['port'] ?? 3306);
-    $database = $config['database'] ?? 'sakura_beaded_bags';
-    $username = $config['username'] ?? '';
-    $password = $config['password'] ?? '';
+    $readEnv = static function (string $key): ?string {
+        $value = getenv($key);
+        return $value === false ? null : $value;
+    };
+    $host = $readEnv('SBB_DB_HOST') ?? ($localConfig['host'] ?? '127.0.0.1');
+    $port = (int) ($readEnv('SBB_DB_PORT') ?? ($localConfig['port'] ?? 3306));
+    $database = $readEnv('SBB_DB_NAME') ?? ($localConfig['database'] ?? 'sakura_beaded_bags');
+    $username = $readEnv('SBB_DB_USER') ?? ($localConfig['username'] ?? '');
+    $password = $readEnv('SBB_DB_PASSWORD') ?? ($localConfig['password'] ?? '');
+
+    // Do not silently connect with an anonymous user on a new installation.
+    if (trim((string) $username) === '') {
+        throw new RuntimeException('MySQL credentials missing: set SBB_DB_USER or create includes/db.local.php.');
+    }
+    if ($port < 1 || $port > 65535) {
+        throw new RuntimeException('Invalid MySQL port.');
+    }
+    if (!preg_match('/^[A-Za-z0-9_]+$/', (string) $database)) {
+        throw new RuntimeException('Invalid MySQL database name.');
+    }
 
     $dsn = "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4";
     $connection = new PDO($dsn, $username, $password, [

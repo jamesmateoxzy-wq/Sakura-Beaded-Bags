@@ -12,11 +12,17 @@
  * Always close the page with includes/footer.php
  */
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/config.php';
 
 if (session_status() === PHP_SESSION_NONE) { session_start(); }
 
-// Login guard: anyone who is not signed in goes back to the login page.
-if (empty($_SESSION['user_id'])) { header('Location: login.php'); exit; }
+// Admin pages require an approved Google account. Old demo sessions do not count.
+$sessionEmail = strtolower(trim((string) ($_SESSION['user_email'] ?? '')));
+if (empty($_SESSION['user_id']) || $_SESSION['user_id'] === 'demo'
+    || $sessionEmail === '' || !in_array($sessionEmail, ALLOWED_ADMIN_EMAILS, true)) {
+    header('Location: login.php');
+    exit;
+}
 
 $pageTitle    = $pageTitle    ?? 'Sakura Beaded Bags';
 $pageSubtitle = $pageSubtitle ?? '';
