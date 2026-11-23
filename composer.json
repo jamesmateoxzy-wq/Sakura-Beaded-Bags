@@ -1,0 +1,13 @@
+{
+  "name": "sakura-beaded-bags/admin-system",
+  "description": "Internal Sakura Beaded Bags management application",
+  "type": "project",
+  "require": {
+    "php": "^8.2",
+    "google/apiclient": "^2.0"
+  },
+  "config": {
+    "sort-packages": true,
+    "optimize-autoloader": true
+  }
+}
