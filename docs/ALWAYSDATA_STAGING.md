@@ -2,7 +2,7 @@
 
 **Purpose:** a no-cost, noncommercial academic test deployment. Do not put real customers, real sales, personal payment details or passwords in this staging database. This is *not* approval for production use.
 
-**Plan limits (verified Nov 23, 2026):** Free plan offers 1 GB combined storage, 256 MB RAM, 1/4 CPU, a site at `[account].alwaysdata.net`, and is restricted to **nonprofit/noncommercial use**. Without a payment card or previous payment, alwaysdata applies a technical restricted mode which may affect web requests. Confirm current eligibility before signing up.
+**Plan limits (verified Nov 23, 2026):** Free plan offers 1 GB combined storage, 256 MB RAM, 1/4 CPU, a site at `[account].alwaysdata.net`, and is restricted to **nonprofit/noncommercial use**. **Important signup caveat (observed Nov 23, 2026):** although the public pricing page describes Free as requiring no card, the live signup form currently says a credit/debit card validation is required to continue (and claims no fee will be charged). Free hosting is €0/month, but signup may **not** be card-free. Verify the requirement yourself. If you will not provide payment details, consider HelioHost's free Johnny server (when signups are open).
 
 Official sources:
 - https://help.alwaysdata.com/en/docs/admin-billing/billing/public-cloud-prices/
@@ -23,9 +23,9 @@ Official sources:
 ## 1. Free account
 
 1. Go to https://www.alwaysdata.com/en/ and choose the **Free** offering, not a paid trial.
-2. Create a hosting account. Write down its account name as `[account]`; the free site's address is typically `https://[account].alwaysdata.net`.
+2. Review any card-validation requirement and the final selected plan **before** completing signup. Create a hosting account only if acceptable. Write down its account name as `[account]`; the free site's address is typically `https://[account].alwaysdata.net`.
 3. Verify the address has valid HTTPS; the provider manages certificates for its `alwaysdata.net` subdomains.
-4. Leave payment details empty if staying truly at ₱0. Expect additional HTTP restrictions on such accounts.
+4. The current signup page may require **card validation despite the €0 price**. Do not continue if you want a no-card service. If you choose to complete validation, confirm the selected plan is Free / €0, not a paid 30-day trial. Accounts without card validation (when allowed) may be subject to technical restrictions.
 
 ## 2. Prepare remote files (after source is ready for staging)
 
