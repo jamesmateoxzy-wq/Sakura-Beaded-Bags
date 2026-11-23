@@ -49,5 +49,6 @@ Team Members
 
 - [Google Login setup for teammates](docs/GOOGLE_LOGIN_TEAM_SETUP.md)
 - [GitHub and production deployment preparation checklist](docs/DEPLOYMENT_PREP.md)
+- [Free alwaysdata staging deployment walkthrough](docs/ALWAYSDATA_STAGING.md)
 
 `main` is not deployed automatically. The documentation describes the steps still required before deploying.
