@@ -177,6 +177,32 @@
   white-space: nowrap;
 }
 
+#addCategoryModal .modal {
+  width: min(440px, calc(100vw - 32px));
+}
+
+#addCategoryModal .modal-body {
+  padding: 18px 24px;
+}
+
+#addCategoryModal .modal-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#addCategoryModal .modal-foot .actions {
+  display: flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
+#addCategoryModal #acError {
+  margin-top: 10px;
+}
+
 #costSheet,
 #emptyState {
   min-width: 0;
@@ -514,6 +540,11 @@
 @media (max-width: 700px) {
   .prod-toolbar {
     gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .prod-toolbar .select {
+    flex-basis: 100%;
   }
 
   .prod-toolbar .select {

@@ -9,6 +9,10 @@
   const endpoint = 'api/products.php';
   let materials = [], products = [], categories = [], csrf = '', selectedId = null;
   let draft = null, newDraft = null, onAddMaterial = null, pending = false;
+  let lastCreatedCategoryId = null;
+  let newPhoto = null, photoPreviewUrl = null;
+  const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+  const PHOTO_TYPES = ['image/jpeg','image/png','image/webp'];
   const IMG_PATH = '../assets/images/products/';
   function toast(msg) { if (S && S.toast) S.toast(msg); }
   function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g,
@@ -18,12 +22,22 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['nSave','sSave','openAddProduct','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
-  async function request(payload) {
+  async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
     if (payload) {
-      Object.assign(opts, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf}, body:JSON.stringify(payload)});
+      opts.method = 'POST';
+      opts.headers = {'X-CSRF-Token':csrf};
+      if (photoFile) {
+        const form = new FormData();
+        form.append('data', JSON.stringify(payload));
+        form.append('photo', photoFile, photoFile.name);
+        opts.body = form; // The browser adds the multipart boundary.
+      } else {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(payload);
+      }
     }
     let res;
     try { res = await fetch(endpoint, opts); }
@@ -41,9 +55,36 @@
     return {materials:materialTotal,cost:total,price,profit:Math.round((price-total)*100)/100,margin:price?100*(price-total)/price:0};
   }
   function thumbnail(p) {
-    const url = p.image && !String(p.image).startsWith('data:') ? (String(p.image).startsWith('/') ? p.image : IMG_PATH + p.image) : '';
+    const imagePath = String(p.image || '');
+    const url = imagePath && !imagePath.startsWith('data:')
+      ? (imagePath.startsWith('../uploads/product-photos/') || imagePath.startsWith('/') ? imagePath : IMG_PATH + imagePath) : '';
     return '<div class="thumb ' + (url?'':'no-img') + '" data-initial="' + esc((p.name||'?').charAt(0).toUpperCase()) + '">' +
       (url?'<img src="'+esc(url)+'" alt="'+esc(p.name)+'" onerror="this.parentElement.classList.add(\'no-img\')">':'')+'</div>';
+  }
+  function clearProductPhoto() {
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    photoPreviewUrl = null;
+    newPhoto = null;
+    $('nPhoto').value = '';
+    $('nPhotoName').textContent = 'No photo chosen';
+    $('nPhotoPreview').replaceChildren();
+    $('nPhotoPreview').classList.add('no-img');
+  }
+  function chooseProductPhoto(file) {
+    clearProductPhoto();
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type)) { toast('Choose a JPG, PNG or WebP photo.'); return; }
+    if (file.size < 1 || file.size > MAX_PHOTO_BYTES) {
+      toast('Product photos must be non-empty and no larger than 4 MB.'); return;
+    }
+    newPhoto = file;
+    photoPreviewUrl = URL.createObjectURL(file);
+    const img = document.createElement('img');
+    img.src = photoPreviewUrl;
+    img.alt = 'Selected product photo preview';
+    $('nPhotoPreview').appendChild(img);
+    $('nPhotoPreview').classList.remove('no-img');
+    $('nPhotoName').textContent = file.name + ' · ' + (file.size / 1024 / 1024).toFixed(2) + ' MB';
   }
   function populateCategories() {
     for (const id of ['categoryFilter','sCategory','nCategory']) {
@@ -144,6 +185,43 @@
   function setup() {
     $('productSearch').addEventListener('input',listProducts);
     $('categoryFilter').addEventListener('change',listProducts);
+    $('nPhoto').addEventListener('change',event=>chooseProductPhoto(event.target.files?.[0]));
+    $('openAddCategory').addEventListener('click',()=>{
+      if (pending) return;
+      $('addCategoryForm').reset();
+      $('acError').textContent = '';
+      $('acError').hidden = true;
+      S.openModal('addCategoryModal');
+    });
+    $('acName').addEventListener('input',()=>{ $('acError').hidden = true; });
+    $('addCategoryForm').addEventListener('submit',async event=>{
+      event.preventDefault();
+      if (pending) return;
+      const name = $('acName').value.trim().replace(/\s+/g,' ');
+      const error = $('acError');
+      function showError(message) { error.textContent = message; error.hidden = false; }
+      if (!name || Array.from(name).length > 100) { showError('Enter a category name (up to 100 characters).'); return; }
+      if (name.toLowerCase() === 'all') { showError('This category name is reserved.'); return; }
+      if (categories.some(c => c.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        showError('This category already exists.'); return;
+      }
+      setBusy(true);
+      try {
+        const saved = await request({action:'add_category',name});
+        const data = await request();
+        categories = data.categories || [];
+        csrf = data.csrf || csrf;
+        populateCategories();
+        lastCreatedCategoryId = Number(saved.id);
+        $('nCategory').value = String(lastCreatedCategoryId);
+        S.closeModal('addCategoryModal');
+        toast('Category saved in MySQL. It is ready for new products!');
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        setBusy(false);
+      }
+    });
     $('sName').addEventListener('input',()=>{if(draft){draft.name=$('sName').value;$('sTitle').textContent=(draft.name||'Product')+' · Costing sheet';}});
     $('sCategory').addEventListener('change',()=>{if(draft){draft.categoryId=Number($('sCategory').value);draft.category=categoryName(draft.categoryId);}});
     for(const type of ['Labor','Packaging','Markup']) $('s'+type).addEventListener('input',()=>{if(draft){draft[type.toLowerCase()]=num($('s'+type).value);summary('s',draft);}});
@@ -164,10 +242,11 @@
     });
     $('openAddProduct').addEventListener('click',()=>{
       if(!materials.length){toast('Add materials in Inventory first.');return;}
-      newDraft={name:'',categoryId:categories[0]?.id||0,materials:[],labor:0,packaging:0,markup:100};
+      const defaultCategoryId = categories.some(c=>c.id===lastCreatedCategoryId) ? lastCreatedCategoryId : (categories[0]?.id||0);
+      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,markup:100};
       $('nName').value='';$('nCategory').value=newDraft.categoryId;$('nSku').value='Assigned when saved';
       $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;
-      $('nPhoto').disabled=true;$('nPhotoName').textContent='Photo uploads will be added in a later backend step.';
+      $('nPhoto').disabled=false;clearProductPhoto();
       renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);
       S.openModal('addProductModal');
     });
@@ -177,7 +256,7 @@
     $('nAddMaterial').addEventListener('click',()=>{if(!newDraft)return;addMaterialModal('Adding to '+(newDraft.name||'new product')+' recipe',entry=>{
       addToRecipe(newDraft.materials,entry);renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);});});
     $('nSave').addEventListener('click',async()=>{if(pending||!valid(newDraft))return;
-      setBusy(true);try{const res=await request(payload(newDraft,'add_product'));S.closeModal('addProductModal');await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
+      setBusy(true);try{const res=await request(payload(newDraft,'add_product'),newPhoto);S.closeModal('addProductModal');clearProductPhoto();await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
       catch(e){toast(e.message);}finally{setBusy(false);}
     });
     $('sSave').addEventListener('click',async()=>{if(pending||!valid(draft))return;

@@ -64,6 +64,50 @@ function prod_material_id(mixed $value): int {
 }
 function prod_money(float $n): string { return number_format(round($n + 0.00000001, 2), 2, '.', ''); }
 
+/**
+ * Accept only real JPEG/PNG/WebP uploads. The disk file is removed if a
+ * product database transaction fails, and the photo filename is random.
+ */
+function prod_store_photo(array $photo): array {
+    $error = $photo['error'] ?? UPLOAD_ERR_NO_FILE;
+    if (!is_int($error) || $error !== UPLOAD_ERR_OK) {
+        if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true)) {
+            throw new InvalidArgumentException('Photo exceeds the PHP upload size limit. Check php.ini.');
+        }
+        throw new InvalidArgumentException('Photo could not be uploaded. Please choose it again.');
+    }
+    $bytes = $photo['size'] ?? 0;
+    $tmp = $photo['tmp_name'] ?? '';
+    if (!is_int($bytes) || $bytes < 1 || $bytes > 4 * 1024 * 1024) {
+        throw new InvalidArgumentException('Photo must be non-empty and no larger than 4 MB.');
+    }
+    if (!is_string($tmp) || !is_uploaded_file($tmp)) {
+        throw new InvalidArgumentException('Invalid photo upload.');
+    }
+    $dimensions = @getimagesize($tmp);
+    $formats = ['image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp'];
+    $mime = is_array($dimensions) ? ($dimensions['mime'] ?? '') : '';
+    $width = (int) ($dimensions[0] ?? 0);
+    $height = (int) ($dimensions[1] ?? 0);
+    if (!isset($formats[$mime]) || $width < 1 || $height < 1 || $width > 6000 || $height > 6000) {
+        throw new InvalidArgumentException('Choose a valid JPG, PNG or WebP image up to 6000 × 6000 pixels.');
+    }
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    if ($finfo->file($tmp) !== $mime) {
+        throw new InvalidArgumentException('The photo format does not match its contents.');
+    }
+    $directory = dirname(__DIR__, 2) . '/uploads/product-photos';
+    if (!is_dir($directory) && !@mkdir($directory, 0755, true) && !is_dir($directory)) {
+        throw new RuntimeException('Cannot create product photo folder. Check server permissions.');
+    }
+    $filename = 'product-' . bin2hex(random_bytes(16)) . '.' . $formats[$mime];
+    $target = $directory . '/' . $filename;
+    if (!move_uploaded_file($tmp, $target)) {
+        throw new RuntimeException('Cannot save product photo. Check server write permissions.');
+    }
+    return ['disk_path'=>$target, 'image_path'=>'../uploads/product-photos/' . $filename];
+}
+
 $sessionId = $_SESSION['user_id'] ?? null;
 $isDemo = $sessionId === 'demo';
 $host = strtolower(explode(':', (string) ($_SERVER['HTTP_HOST'] ?? ''))[0]);
@@ -121,6 +165,7 @@ function prod_catalog(PDO $pdo): array {
         'products' => $products, 'csrf' => $_SESSION['sbb_products_csrf']];
 }
 
+$uploadedPhotoDiskPath = null;
 try {
     $pdo = sbb_db();
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') prod_out(prod_catalog($pdo));
@@ -130,12 +175,21 @@ try {
         || !hash_equals($_SESSION['sbb_products_csrf'], $token)) {
         prod_fail('Security token invalid. Refresh the page and retry.', 403);
     }
-    if (stripos((string) ($_SERVER['CONTENT_TYPE'] ?? ''), 'application/json') !== 0) {
-        prod_fail('JSON content type required.', 415);
+    $contentType = (string) ($_SERVER['CONTENT_TYPE'] ?? '');
+    $photoUpload = null;
+    if (stripos($contentType, 'multipart/form-data') === 0) {
+        $body = json_decode((string) ($_POST['data'] ?? ''), true);
+        if (!is_array($body)) prod_fail('Invalid product data. Check PHP post_max_size.');
+        $photoUpload = $_FILES['photo'] ?? null;
+        if (!is_array($photoUpload)) prod_fail('Photo was not received. Check PHP upload_max_filesize.');
+    } elseif (stripos($contentType, 'application/json') === 0) {
+        $body = json_decode((string) file_get_contents('php://input'), true);
+        if (!is_array($body)) prod_fail('Invalid JSON request.');
+    } else {
+        prod_fail('JSON or multipart form data required.', 415);
     }
-    $body = json_decode((string) file_get_contents('php://input'), true);
-    if (!is_array($body)) prod_fail('Invalid JSON request.');
     $action = $body['action'] ?? '';
+    if ($photoUpload !== null && $action !== 'add_product') prod_fail('Photos are only supported for new products.');
 
     if ($action === 'add_category') {
         $name = prod_string($body['name'] ?? null, 'Category name', 100);
@@ -207,20 +261,29 @@ try {
     }
     $insert = $pdo->prepare('INSERT INTO product_materials (product_id, material_id, quantity_required) VALUES (?, ?, ?)');
     foreach ($recipe as $matId => $qty) $insert->execute([$productId, $matId, $qty]);
+    if ($photoUpload !== null) {
+        $storedPhoto = prod_store_photo($photoUpload);
+        $uploadedPhotoDiskPath = $storedPhoto['disk_path'];
+        $pdo->prepare('UPDATE products SET image_path = ? WHERE product_id = ?')
+            ->execute([$storedPhoto['image_path'], $productId]);
+    }
     $pdo->commit();
     prod_out(['ok' => true, 'id' => $productId, 'price' => (float) $priceSql,
         'message' => $action === 'add_product' ? 'Product saved in MySQL.' : 'Pricing updated in MySQL.'],
         $action === 'add_product' ? 201 : 200);
 } catch (InvalidArgumentException $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if ($uploadedPhotoDiskPath !== null && is_file($uploadedPhotoDiskPath)) @unlink($uploadedPhotoDiskPath);
     prod_fail($e->getMessage());
 } catch (PDOException $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if ($uploadedPhotoDiskPath !== null && is_file($uploadedPhotoDiskPath)) @unlink($uploadedPhotoDiskPath);
     if ($e->getCode() === '23000') prod_fail('This name or SKU already exists, or a referenced item was removed.');
     error_log('SBB products API database error: ' . $e->getMessage());
     prod_fail('Database request failed. Check PHP server logs.', 500);
 } catch (Throwable $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    if ($uploadedPhotoDiskPath !== null && is_file($uploadedPhotoDiskPath)) @unlink($uploadedPhotoDiskPath);
     error_log('SBB products API: ' . $e->getMessage());
     prod_fail('Unexpected server error. Check PHP server logs.', 500);
 }
