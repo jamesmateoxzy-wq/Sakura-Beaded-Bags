@@ -14,6 +14,20 @@ In Google Cloud Console > Google Auth Platform:
    - Authorized redirect URI: `http://127.0.0.1:8000/admin/google-callback.php`
 3. Share the **OAuth Client ID** with teammates. This ID is public. **Never share the Client Secret** or upload the downloaded OAuth JSON file to GitHub.
 
+## If Google Login was already configured locally
+
+Earlier versions stored the Client ID and approved Gmail addresses directly in the tracked `includes/config.php`. Before switching to this branch, **preserve your existing local modifications**:
+
+```powershell
+git stash push -m "Save my existing Google Login settings" -- includes/config.php
+git fetch origin
+git switch --track origin/feature/google-login-team-setup
+```
+
+If that local branch already exists, use `git switch feature/google-login-team-setup` instead of the final command.
+
+Next, copy the `config.local.php.example` template as described below and **manually transfer your Client ID and approved Gmail addresses** into `config.local.php`. Do **not** run `git stash pop` on the new branch: the old config.php file uses a different configuration layout. Your stash remains available if needed when returning to the old branch. If Git warns that unrelated local work would be overwritten, stop and preserve that work before switching.
+
 ## Each teammate: local PHP setup
 
 1. Clone/pull the shared Sakura repository with the team Google Login changes.
