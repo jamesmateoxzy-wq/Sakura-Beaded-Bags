@@ -1,4 +1,4 @@
-# Sakura Beaded Bags — GitHub & Deployment Preparation
+# Sakura Beaded Bags - GitHub & Deployment Preparation
 
 **Status: preparation only.** This branch has not been merged into `main`, deployed to a server, tested end-to-end on a hosted domain, or approved for real customer data.
 
