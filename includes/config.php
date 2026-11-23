@@ -16,5 +16,5 @@ const ALLOWED_ADMIN_EMAILS = [
     // 'groupmate@gmail.com',
 ];
 
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 const USE_SAMPLE_DATA = false;
