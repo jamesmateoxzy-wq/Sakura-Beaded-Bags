@@ -9,6 +9,7 @@
   const endpoint = 'api/products.php';
   let materials = [], products = [], categories = [], csrf = '', selectedId = null;
   let draft = null, newDraft = null, onAddMaterial = null, pending = false;
+  let lastCreatedCategoryId = null;
   const IMG_PATH = '../assets/images/products/';
   function toast(msg) { if (S && S.toast) S.toast(msg); }
   function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g,
@@ -18,7 +19,7 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['nSave','sSave','openAddProduct','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
   async function request(payload) {
     const opts = {credentials:'same-origin', cache:'no-store'};
@@ -144,6 +145,42 @@
   function setup() {
     $('productSearch').addEventListener('input',listProducts);
     $('categoryFilter').addEventListener('change',listProducts);
+    $('openAddCategory').addEventListener('click',()=>{
+      if (pending) return;
+      $('addCategoryForm').reset();
+      $('acError').textContent = '';
+      $('acError').hidden = true;
+      S.openModal('addCategoryModal');
+    });
+    $('acName').addEventListener('input',()=>{ $('acError').hidden = true; });
+    $('addCategoryForm').addEventListener('submit',async event=>{
+      event.preventDefault();
+      if (pending) return;
+      const name = $('acName').value.trim().replace(/\s+/g,' ');
+      const error = $('acError');
+      function showError(message) { error.textContent = message; error.hidden = false; }
+      if (!name || Array.from(name).length > 100) { showError('Enter a category name (up to 100 characters).'); return; }
+      if (name.toLowerCase() === 'all') { showError('This category name is reserved.'); return; }
+      if (categories.some(c => c.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
+        showError('This category already exists.'); return;
+      }
+      setBusy(true);
+      try {
+        const saved = await request({action:'add_category',name});
+        const data = await request();
+        categories = data.categories || [];
+        csrf = data.csrf || csrf;
+        populateCategories();
+        lastCreatedCategoryId = Number(saved.id);
+        $('nCategory').value = String(lastCreatedCategoryId);
+        S.closeModal('addCategoryModal');
+        toast('Category saved in MySQL. It is ready for new products!');
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        setBusy(false);
+      }
+    });
     $('sName').addEventListener('input',()=>{if(draft){draft.name=$('sName').value;$('sTitle').textContent=(draft.name||'Product')+' · Costing sheet';}});
     $('sCategory').addEventListener('change',()=>{if(draft){draft.categoryId=Number($('sCategory').value);draft.category=categoryName(draft.categoryId);}});
     for(const type of ['Labor','Packaging','Markup']) $('s'+type).addEventListener('input',()=>{if(draft){draft[type.toLowerCase()]=num($('s'+type).value);summary('s',draft);}});
@@ -164,7 +201,8 @@
     });
     $('openAddProduct').addEventListener('click',()=>{
       if(!materials.length){toast('Add materials in Inventory first.');return;}
-      newDraft={name:'',categoryId:categories[0]?.id||0,materials:[],labor:0,packaging:0,markup:100};
+      const defaultCategoryId = categories.some(c=>c.id===lastCreatedCategoryId) ? lastCreatedCategoryId : (categories[0]?.id||0);
+      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,markup:100};
       $('nName').value='';$('nCategory').value=newDraft.categoryId;$('nSku').value='Assigned when saved';
       $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;
       $('nPhoto').disabled=true;$('nPhotoName').textContent='Photo uploads will be added in a later backend step.';
