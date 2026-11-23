@@ -10,6 +10,10 @@
  * localhost installation. No CLIENT SECRET is used by this sign-in flow.
  */
 return [
+    // Leave these two values for local work. Hosted production needs HTTPS.
+    'environment' => 'development',
+    'base_url' => '',
+
     'google_client_id' => 'PASTE-YOUR-CLIENT-ID.apps.googleusercontent.com',
     'allowed_admin_emails' => [
         'your-email@gmail.com',
