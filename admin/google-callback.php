@@ -40,9 +40,9 @@ $autoload = __DIR__ . '/../vendor/autoload.php';
 if (is_file($autoload)) {
     require_once $autoload;
 }
-if (class_exists(\\Google\\Client::class)) {
+if (class_exists(\Google\Client::class)) {
     try {
-        $googleClient = new \\Google\\Client(['client_id' => GOOGLE_CLIENT_ID]);
+        $googleClient = new \Google\Client(['client_id' => GOOGLE_CLIENT_ID]);
         $payload = $googleClient->verifyIdToken($credential);
         if (is_array($payload)) {
             $info = $payload;
