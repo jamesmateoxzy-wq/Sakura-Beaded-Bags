@@ -81,9 +81,10 @@ Do **not** commit `vendor/`; it is ignored. Before deployment check that `vendor
 
 ```sh
 php scripts/check_db.php
+php scripts/check_deployment.php
 ```
 
-The schema alone will not synchronize everyone's laptop data. A shared online database is a separate hosted service with credentials and backup responsibilities.
+The deployment preflight script checks PHP, Google configuration, installed Composer code and MySQL without printing passwords. It does not substitute for manual HTTP/security tests. The schema alone will not synchronize everyone's laptop data. A shared online database is a separate hosted service with credentials and backup responsibilities.
 
 ## HTTP and security safeguards
 
@@ -101,7 +102,7 @@ See [GOOGLE_LOGIN_TEAM_SETUP.md](GOOGLE_LOGIN_TEAM_SETUP.md) for the separate `1
 
 ## Release checklist
 
-- [ ] Code reviewed and tested on an isolated branch
+- [ ] Code reviewed and tested on an isolated branch (automated syntax workflow passing)
 - [ ] Existing local `config.php` edits safely migrated to `config.local.php`
 - [ ] Composer installed and a verified `composer.lock` committed
 - [ ] Hosted PHP + MySQL provider chosen; domain and valid HTTPS available
