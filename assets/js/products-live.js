@@ -10,6 +10,9 @@
   let materials = [], products = [], categories = [], csrf = '', selectedId = null;
   let draft = null, newDraft = null, onAddMaterial = null, pending = false;
   let lastCreatedCategoryId = null;
+  let newPhoto = null, photoPreviewUrl = null;
+  const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
+  const PHOTO_TYPES = ['image/jpeg','image/png','image/webp'];
   const IMG_PATH = '../assets/images/products/';
   function toast(msg) { if (S && S.toast) S.toast(msg); }
   function esc(x) { return String(x == null ? '' : x).replace(/[&<>"']/g,
@@ -21,10 +24,20 @@
     pending = value;
     ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
-  async function request(payload) {
+  async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
     if (payload) {
-      Object.assign(opts, {method:'POST', headers:{'Content-Type':'application/json','X-CSRF-Token':csrf}, body:JSON.stringify(payload)});
+      opts.method = 'POST';
+      opts.headers = {'X-CSRF-Token':csrf};
+      if (photoFile) {
+        const form = new FormData();
+        form.append('data', JSON.stringify(payload));
+        form.append('photo', photoFile, photoFile.name);
+        opts.body = form; // The browser adds the multipart boundary.
+      } else {
+        opts.headers['Content-Type'] = 'application/json';
+        opts.body = JSON.stringify(payload);
+      }
     }
     let res;
     try { res = await fetch(endpoint, opts); }
@@ -42,9 +55,36 @@
     return {materials:materialTotal,cost:total,price,profit:Math.round((price-total)*100)/100,margin:price?100*(price-total)/price:0};
   }
   function thumbnail(p) {
-    const url = p.image && !String(p.image).startsWith('data:') ? (String(p.image).startsWith('/') ? p.image : IMG_PATH + p.image) : '';
+    const imagePath = String(p.image || '');
+    const url = imagePath && !imagePath.startsWith('data:')
+      ? (imagePath.startsWith('../uploads/product-photos/') || imagePath.startsWith('/') ? imagePath : IMG_PATH + imagePath) : '';
     return '<div class="thumb ' + (url?'':'no-img') + '" data-initial="' + esc((p.name||'?').charAt(0).toUpperCase()) + '">' +
       (url?'<img src="'+esc(url)+'" alt="'+esc(p.name)+'" onerror="this.parentElement.classList.add(\'no-img\')">':'')+'</div>';
+  }
+  function clearProductPhoto() {
+    if (photoPreviewUrl) URL.revokeObjectURL(photoPreviewUrl);
+    photoPreviewUrl = null;
+    newPhoto = null;
+    $('nPhoto').value = '';
+    $('nPhotoName').textContent = 'No photo chosen';
+    $('nPhotoPreview').replaceChildren();
+    $('nPhotoPreview').classList.add('no-img');
+  }
+  function chooseProductPhoto(file) {
+    clearProductPhoto();
+    if (!file) return;
+    if (!PHOTO_TYPES.includes(file.type)) { toast('Choose a JPG, PNG or WebP photo.'); return; }
+    if (file.size < 1 || file.size > MAX_PHOTO_BYTES) {
+      toast('Product photos must be non-empty and no larger than 4 MB.'); return;
+    }
+    newPhoto = file;
+    photoPreviewUrl = URL.createObjectURL(file);
+    const img = document.createElement('img');
+    img.src = photoPreviewUrl;
+    img.alt = 'Selected product photo preview';
+    $('nPhotoPreview').appendChild(img);
+    $('nPhotoPreview').classList.remove('no-img');
+    $('nPhotoName').textContent = file.name + ' · ' + (file.size / 1024 / 1024).toFixed(2) + ' MB';
   }
   function populateCategories() {
     for (const id of ['categoryFilter','sCategory','nCategory']) {
@@ -145,6 +185,7 @@
   function setup() {
     $('productSearch').addEventListener('input',listProducts);
     $('categoryFilter').addEventListener('change',listProducts);
+    $('nPhoto').addEventListener('change',event=>chooseProductPhoto(event.target.files?.[0]));
     $('openAddCategory').addEventListener('click',()=>{
       if (pending) return;
       $('addCategoryForm').reset();
@@ -205,7 +246,7 @@
       newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,markup:100};
       $('nName').value='';$('nCategory').value=newDraft.categoryId;$('nSku').value='Assigned when saved';
       $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;
-      $('nPhoto').disabled=true;$('nPhotoName').textContent='Photo uploads will be added in a later backend step.';
+      $('nPhoto').disabled=false;clearProductPhoto();
       renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);
       S.openModal('addProductModal');
     });
@@ -215,7 +256,7 @@
     $('nAddMaterial').addEventListener('click',()=>{if(!newDraft)return;addMaterialModal('Adding to '+(newDraft.name||'new product')+' recipe',entry=>{
       addToRecipe(newDraft.materials,entry);renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);});});
     $('nSave').addEventListener('click',async()=>{if(pending||!valid(newDraft))return;
-      setBusy(true);try{const res=await request(payload(newDraft,'add_product'));S.closeModal('addProductModal');await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
+      setBusy(true);try{const res=await request(payload(newDraft,'add_product'),newPhoto);S.closeModal('addProductModal');clearProductPhoto();await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
       catch(e){toast(e.message);}finally{setBusy(false);}
     });
     $('sSave').addEventListener('click',async()=>{if(pending||!valid(draft))return;
