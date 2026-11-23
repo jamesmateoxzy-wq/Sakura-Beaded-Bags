@@ -1,0 +1,9 @@
+# Defense in depth for Apache hosting where the repository root is public.
+# Verify these rules work on the chosen host before any public deployment.
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(includes|database|docs|scripts|vendor)(/|$) - [F,NC,L]
+    RewriteRule (^|/)\.git(/|$) - [F,NC,L]
+    RewriteRule ^(README\.md|composer\.(json|lock)|\.env(\..*)?)$ - [F,NC,L]
+</IfModule>
