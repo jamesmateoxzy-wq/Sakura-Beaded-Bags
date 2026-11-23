@@ -91,6 +91,7 @@ require_once __DIR__ . '/../includes/header.php';
   <section class="prod-detail">
     <div class="prod-toolbar">
       <select class="select" id="categoryFilter" aria-label="Filter by category"></select>
+      <button type="button" class="btn btn-outline" id="openAddCategory"><?= icon('plus') ?> Add Category</button>
       <button type="button" class="btn btn-primary" id="openAddProduct"><?= icon('plus') ?> Add Product</button>
     </div>
 
@@ -148,6 +149,38 @@ require_once __DIR__ . '/../includes/header.php';
       <p class="note"><?= icon('info') ?> <span id="sNote"></span></p>
     </div>
   </section>
+</div>
+
+<!-- =====================================================
+     MODAL: Add Category
+     ===================================================== -->
+<div class="modal-overlay" id="addCategoryModal" role="dialog" aria-modal="true" aria-labelledby="acTitle">
+  <div class="modal modal-sm">
+    <div class="modal-head">
+      <div>
+        <h2 id="acTitle">Add Category</h2>
+        <p>Create a collection for organizing products.</p>
+      </div>
+      <button type="button" class="icon-btn" data-close-modal="addCategoryModal" aria-label="Close"><?= icon('x') ?></button>
+    </div>
+    <form id="addCategoryForm">
+      <div class="modal-body">
+        <div class="field">
+          <label for="acName">Category name <span class="req">*</span></label>
+          <input class="input" type="text" id="acName" name="categoryName" maxlength="100" autocomplete="off" placeholder="e.g. Floral collection" required>
+          <p class="hint">Saved categories appear in the filter and product forms.</p>
+          <p class="warn" id="acError" role="alert" hidden></p>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <span class="hint"><span class="req">*</span> Required field</span>
+        <div class="actions">
+          <button type="button" class="btn btn-outline" data-close-modal="addCategoryModal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="acSave">Save Category</button>
+        </div>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- =====================================================
