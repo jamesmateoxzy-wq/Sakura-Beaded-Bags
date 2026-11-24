@@ -18,8 +18,10 @@ header('X-Content-Type-Options: nosniff');
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/final_features.php';
 
 function api_out(array $data, int $code = 200): void {
+    if (($data['ok']??false) && ($_SERVER['REQUEST_METHOD']??'')==='POST') sbb_log_success('Inventory',$GLOBALS['action']??null);
     http_response_code($code);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
