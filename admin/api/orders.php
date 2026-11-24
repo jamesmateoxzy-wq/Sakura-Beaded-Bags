@@ -408,6 +408,17 @@ function ord_archive(PDO $pdo, array $data): array {
     return ['ok' => true, 'message' => 'Order archived. No inventory changed.'];
 }
 
+function ord_unarchive(PDO $pdo, array $data): array {
+    $orderId = ord_id($data['orderId'] ?? null, 'order');
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt->execute([$orderId]);
+    if ($stmt->fetchColumn() === false) throw new InvalidArgumentException('Order not found.');
+    $pdo->prepare('UPDATE customer_orders SET archived_at = NULL WHERE order_id = ?')->execute([$orderId]);
+    $pdo->commit();
+    return ['ok' => true, 'message' => 'Order removed from archive. Status, payments and inventory were unchanged.'];
+}
+
 try {
     $pdo = sbb_db();
     if ($method === 'GET') ord_get($pdo);
@@ -424,6 +435,7 @@ try {
     if ($action === 'create_order') ord_out(ord_create($pdo, $data), 201);
     if ($action === 'cancel_order') ord_out(ord_cancel($pdo, $data));
     if ($action === 'archive_order') ord_out(ord_archive($pdo, $data));
+    if ($action === 'unarchive_order') ord_out(ord_unarchive($pdo, $data));
     if ($action === 'advance_order') ord_out(ord_advance($pdo, $data));
     ord_fail('Unknown action.');
 } catch (InvalidArgumentException $e) {
