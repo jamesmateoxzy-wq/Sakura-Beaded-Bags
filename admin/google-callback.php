@@ -50,5 +50,13 @@ $_SESSION['user_email']   = $email;
 $_SESSION['user_name']    = $info['name'] ?? $email;
 $_SESSION['user_picture'] = $info['picture'] ?? '';
 $_SESSION['user_role']    = 'Admin';
+try {
+    require_once __DIR__ . '/../includes/final_features.php';
+    $db=sbb_db();
+    $stmt=$db->prepare('SELECT display_name,phone FROM sbb_admin_profiles WHERE google_sub=?');
+    $stmt->execute([$_SESSION['user_id']]);
+    if ($profile=$stmt->fetch()) { $_SESSION['user_name']=$profile['display_name']; $_SESSION['user_phone']=$profile['phone']; }
+    sbb_activity($db,'Signed in');
+} catch (Throwable $e) { error_log('SBB profile sign-in: '.$e->getMessage()); }
 header('Location: dashboard.php');
 exit;
