@@ -56,6 +56,51 @@ try {
     $columnExists = $pdo->prepare(
         'SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
     );
+    if ($hasCategories) {
+        $categoryIdColumn = $pdo->prepare(
+            'SELECT EXTRA FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?'
+        );
+        $categoryIdColumn->execute([$schema, 'product_categories', 'category_id']);
+        $categoryIdExtra = $categoryIdColumn->fetchColumn();
+        if ($categoryIdExtra === false) {
+            throw new RuntimeException('product_categories.category_id is missing. Stop and check the existing schema.');
+        }
+        if (stripos((string) $categoryIdExtra, 'auto_increment') === false) {
+            $primaryKey = $pdo->prepare(
+                'SELECT COUNT(*) FROM information_schema.STATISTICS
+                 WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?'
+            );
+            $primaryKey->execute([$schema, 'product_categories', 'PRIMARY']);
+            if ((int) $primaryKey->fetchColumn() !== 1) {
+                throw new RuntimeException('product_categories.category_id must be a primary key before enabling auto-increment.');
+            }
+            $actions[] = [
+                'Enable generated category IDs without changing existing IDs',
+                'ALTER TABLE product_categories MODIFY category_id INT UNSIGNED NOT NULL AUTO_INCREMENT'
+            ];
+        }
+
+        $indexExists = $pdo->prepare(
+            'SELECT COUNT(*) FROM information_schema.STATISTICS
+             WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?'
+        );
+        $indexExists->execute([$schema, 'product_categories', 'uq_product_categories_name']);
+        if ((int) $indexExists->fetchColumn() === 0) {
+            $duplicate = $pdo->query(
+                'SELECT category_name FROM product_categories
+                 GROUP BY category_name HAVING COUNT(*) > 1 LIMIT 1'
+            )->fetchColumn();
+            if ($duplicate !== false) {
+                throw new RuntimeException('Duplicate category names exist; resolve them before adding the unique category-name index.');
+            }
+            $actions[] = [
+                'Prevent duplicate category names',
+                'ALTER TABLE product_categories ADD UNIQUE INDEX uq_product_categories_name (category_name)'
+            ];
+        }
+    }
+
     $columnExists->execute([$schema, 'products', 'sku']);
     $hasSku = (int) $columnExists->fetchColumn() === 1;
     if (!$hasSku) {

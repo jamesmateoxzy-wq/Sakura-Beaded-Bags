@@ -4,7 +4,7 @@ This folder contains the **structure-only** MySQL/MariaDB schema for the SBB int
 
 ## Requirements
 
-- Windows with XAMPP (PHP 8.2+ with PDO MySQL and MariaDB/MySQL), or an equivalent PHP/MySQL setup.
+- Windows with XAMPP (PHP 8.0+ with PDO MySQL and MariaDB/MySQL), or an equivalent PHP/MySQL setup.
 - The PHP project files from this repository, including `includes/db.php` and `includes/db.local.php.example`.
 
 ## Fresh installation (recommended)
@@ -48,6 +48,9 @@ This folder contains the **structure-only** MySQL/MariaDB schema for the SBB int
 - `scripts/migrate_product_catalog.php`
 - `scripts/migrate_order_requests.php`
 - `scripts/migrate_payment_requests.php`
+- `scripts/migrate_sales_soft_deletion.php`
+
+The sales/soft-deletion migration adds `payments.payment_status` (existing payment rows default to `Successful`), adds `materials.is_active` (existing materials remain active), and updates `v_order_balances` to count only successful payments. Preview it with `php scripts/migrate_sales_soft_deletion.php`; apply it only after backing up with `php scripts/migrate_sales_soft_deletion.php --apply`. The script is re-runnable and does not delete records.
 
 The supplied fresh-install schema already includes these structural changes, so rerunning them is not needed for new installations, except optionally to seed the three product categories.
 

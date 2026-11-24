@@ -28,25 +28,24 @@ try {
     $start = $selectedDate->format('Y-m-d');
     $end = $selectedDate->modify('+1 month')->format('Y-m-d');
 
-    // Roll up order items first; joining raw order_items would inflate counts.
-    // Sales = booked total for non-cancelled orders, not cash receipts.
+    // Keep order counts independent from item/payment rows to prevent inflated counts.
     $totalsSql = <<<'SQL'
 SELECT COUNT(*) AS order_count,
        COALESCE(SUM(CASE WHEN o.production_status <> 'Cancelled'
-             THEN COALESCE(oi.order_total, 0) ELSE 0 END), 0) AS booked_sales,
-       COALESCE(SUM(CASE WHEN o.production_status <> 'Cancelled'
              AND o.delivery_status <> 'Delivered' THEN 1 ELSE 0 END), 0) AS pending_count
 FROM customer_orders AS o
-LEFT JOIN (
-    SELECT order_id, SUM(quantity * unit_price) AS order_total
-    FROM order_items GROUP BY order_id
-) AS oi ON oi.order_id = o.order_id
 WHERE o.order_date >= ? AND o.order_date < ?
 SQL;
     $totalsStmt = $db->prepare($totalsSql);
     $totalsStmt->execute([$start, $end]);
     $totals = $totalsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-    $totalSales = round((float) ($totals['booked_sales'] ?? 0), 2);
+    $salesStmt = $db->prepare("SELECT COALESCE(SUM(p.amount), 0)
+        FROM payments AS p
+        JOIN customer_orders AS o ON o.order_id = p.order_id
+        WHERE p.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
+          AND p.payment_date >= ? AND p.payment_date < ?");
+    $salesStmt->execute([$start, $end]);
+    $totalSales = round((float) $salesStmt->fetchColumn(), 2);
     $totalOrders = (int) ($totals['order_count'] ?? 0); // includes cancelled orders
     $pendingOrders = (int) ($totals['pending_count'] ?? 0);
 
@@ -80,7 +79,7 @@ SQL;
     $lowStockRows = $db->query(<<<'SQL'
 SELECT material_name, unit, quantity_on_hand
 FROM materials
-WHERE quantity_on_hand <= low_stock_threshold
+WHERE is_active = 1 AND quantity_on_hand <= low_stock_threshold
 ORDER BY quantity_on_hand ASC, material_name ASC
 SQL)->fetchAll(PDO::FETCH_ASSOC);
     $lowStockTotal = count($lowStockRows);
@@ -105,24 +104,21 @@ SQL)->fetchAll(PDO::FETCH_ASSOC);
         $monthlySales[$date->format('M')] = 0.0;
     }
     $monthlySql = <<<'SQL'
-SELECT DATE_FORMAT(o.order_date, '%Y-%m') AS order_month,
-       COALESCE(SUM(CASE WHEN o.production_status <> 'Cancelled'
-           THEN COALESCE(oi.order_total, 0) ELSE 0 END), 0) AS booked_sales
-FROM customer_orders AS o
-LEFT JOIN (
-    SELECT order_id, SUM(quantity * unit_price) AS order_total
-    FROM order_items GROUP BY order_id
-) AS oi ON oi.order_id = o.order_id
-WHERE o.order_date >= ? AND o.order_date < ?
-GROUP BY DATE_FORMAT(o.order_date, '%Y-%m')
-ORDER BY order_month ASC
+SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS sales_month,
+       COALESCE(SUM(p.amount), 0) AS received_sales
+FROM payments AS p
+INNER JOIN customer_orders AS o ON o.order_id = p.order_id
+WHERE p.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
+  AND p.payment_date >= ? AND p.payment_date < ?
+GROUP BY DATE_FORMAT(p.payment_date, '%Y-%m')
+ORDER BY sales_month ASC
 SQL;
     $monthlyStmt = $db->prepare($monthlySql);
     $monthlyStmt->execute([$firstMonth->format('Y-m-d'), $end]);
     foreach ($monthlyStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $key = (string) $row['order_month'];
+        $key = (string) $row['sales_month'];
         if (isset($monthKeys[$key])) {
-            $monthlySales[$monthKeys[$key]] = round((float) $row['booked_sales'], 2);
+            $monthlySales[$monthKeys[$key]] = round((float) $row['received_sales'], 2);
         }
     }
 

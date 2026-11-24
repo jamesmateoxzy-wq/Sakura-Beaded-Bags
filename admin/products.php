@@ -1,4 +1,10 @@
 <?php
+/** Product Costing & Pricing; live data and writes use the authorized MySQL API. */
+require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/config.php';
+
+$categories = [];
+
 $pageTitle    = 'Product Costing & Pricing';
 $pageSubtitle = 'Thoughtful pricing for every handcrafted piece.';
 $activePage   = 'products';
@@ -74,6 +80,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="actions">
           <button type="button" class="btn btn-outline" id="sDelete">Delete Product</button>
           <button type="button" class="btn btn-outline" id="sReset">Reset</button>
+          <button type="button" class="btn btn-outline" id="sRemoveProduct">Remove Product</button>
           <button type="button" class="btn btn-primary" id="sSave"><?= icon('check') ?> Save Pricing</button>
         </div>
       </div>
@@ -233,43 +240,6 @@ require_once __DIR__ . '/../includes/header.php';
         <button type="button" class="btn btn-primary" id="amAdd">Add</button>
       </div>
     </div>
-  </div>
-</div>
-
-<!-- Data for products.js (backend: this is where your query results go) -->
-
-<div class="modal-overlay" id="categoryModal" role="dialog" aria-modal="true" aria-labelledby="categoryTitle">
-  <div class="modal modal-sm">
-    <form id="categoryForm">
-      <div class="modal-head"><h2 id="categoryTitle">Add Category</h2></div>
-      <div class="modal-body field">
-        <label for="categoryName">Category name</label>
-        <input class="input" id="categoryName" maxlength="60" required>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn-outline" data-close-modal="categoryModal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Save Category</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="modal-overlay" id="materialCatalogModal" role="dialog" aria-modal="true" aria-labelledby="materialCatalogTitle">
-  <div class="modal modal-sm">
-    <form id="materialCatalogForm">
-      <div class="modal-head"><h2 id="materialCatalogTitle">Register Material</h2></div>
-      <div class="modal-body">
-        <div class="field"><label for="materialName">Name</label><input class="input" id="materialName" maxlength="80" required></div>
-        <div class="field"><label for="materialUnit">Unit</label><input class="input" id="materialUnit" maxlength="20" placeholder="e.g. pcs or meters" required></div>
-        <div class="field"><label for="materialCost">Unit cost (₱)</label><input class="input" id="materialCost" type="number" min="0" max="1000000" step="0.01" required></div>
-        <div class="field"><label for="materialMin">Reorder threshold</label><input class="input" id="materialMin" type="number" min="0" max="1000000" step="0.001" value="0" required></div>
-        <p class="hint">New materials start at zero stock. Record a Stock-In in Inventory after receiving supplies.</p>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn-outline" data-close-modal="materialCatalogModal">Cancel</button>
-        <button type="submit" class="btn btn-primary">Register Material</button>
-      </div>
-    </form>
   </div>
 </div>
 

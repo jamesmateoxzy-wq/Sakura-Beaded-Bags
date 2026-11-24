@@ -117,6 +117,7 @@ CREATE TABLE `materials` (
   `unit_cost` decimal(12,2) NOT NULL DEFAULT 0.00,
   `quantity_on_hand` decimal(12,2) NOT NULL DEFAULT 0.00,
   `low_stock_threshold` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `is_active` tinyint(1) NOT NULL DEFAULT 1,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -176,6 +177,7 @@ CREATE TABLE `payments` (
   `order_id` int(10) UNSIGNED NOT NULL,
   `payment_date` timestamp NOT NULL DEFAULT current_timestamp(),
   `amount` decimal(12,2) NOT NULL,
+  `payment_status` enum('Successful','Cancelled','Refunded') NOT NULL DEFAULT 'Successful',
   `payment_method` enum('Cash','GCash','Bank Transfer','Other') NOT NULL,
   `reference_number` varchar(120) DEFAULT NULL,
   `payment_slip_path` varchar(500) DEFAULT NULL,
@@ -288,7 +290,7 @@ CREATE TABLE `v_product_costing` (
 --
 DROP TABLE IF EXISTS `v_order_balances`;
 
-CREATE ALGORITHM=UNDEFINED SQL SECURITY INVOKER VIEW `v_order_balances`  AS SELECT `o`.`order_id` AS `order_id`, `o`.`customer_id` AS `customer_id`, `o`.`order_date` AS `order_date`, `o`.`production_status` AS `production_status`, `o`.`delivery_status` AS `delivery_status`, coalesce(`item_totals`.`order_total`,0.00) AS `order_total`, coalesce(`receipts`.`total_paid`,0.00) AS `amount_paid`, greatest(coalesce(`item_totals`.`order_total`,0.00) - coalesce(`receipts`.`total_paid`,0.00),0.00) AS `balance_due`, CASE WHEN coalesce(`item_totals`.`order_total`,0.00) = 0 THEN 'No Items' WHEN coalesce(`receipts`.`total_paid`,0.00) = 0 THEN 'Unpaid' WHEN coalesce(`receipts`.`total_paid`,0.00) < `item_totals`.`order_total` THEN 'Partial' ELSE 'Paid' END AS `payment_status` FROM ((`customer_orders` `o` left join (select `order_items`.`order_id` AS `order_id`,sum(`order_items`.`quantity` * `order_items`.`unit_price`) AS `order_total` from `order_items` group by `order_items`.`order_id`) `item_totals` on(`item_totals`.`order_id` = `o`.`order_id`)) left join (select `payments`.`order_id` AS `order_id`,sum(`payments`.`amount`) AS `total_paid` from `payments` group by `payments`.`order_id`) `receipts` on(`receipts`.`order_id` = `o`.`order_id`)) ;
+CREATE ALGORITHM=UNDEFINED SQL SECURITY INVOKER VIEW `v_order_balances`  AS SELECT `o`.`order_id` AS `order_id`, `o`.`customer_id` AS `customer_id`, `o`.`order_date` AS `order_date`, `o`.`production_status` AS `production_status`, `o`.`delivery_status` AS `delivery_status`, coalesce(`item_totals`.`order_total`,0.00) AS `order_total`, coalesce(`receipts`.`total_paid`,0.00) AS `amount_paid`, greatest(coalesce(`item_totals`.`order_total`,0.00) - coalesce(`receipts`.`total_paid`,0.00),0.00) AS `balance_due`, CASE WHEN coalesce(`item_totals`.`order_total`,0.00) = 0 THEN 'No Items' WHEN coalesce(`receipts`.`total_paid`,0.00) = 0 THEN 'Unpaid' WHEN coalesce(`receipts`.`total_paid`,0.00) < `item_totals`.`order_total` THEN 'Partial' ELSE 'Paid' END AS `payment_status` FROM ((`customer_orders` `o` left join (select `order_items`.`order_id` AS `order_id`,sum(`order_items`.`quantity` * `order_items`.`unit_price`) AS `order_total` from `order_items` group by `order_items`.`order_id`) `item_totals` on(`item_totals`.`order_id` = `o`.`order_id`)) left join (select `payments`.`order_id` AS `order_id`,sum(`payments`.`amount`) AS `total_paid` from `payments` where `payments`.`payment_status` = 'Successful' group by `payments`.`order_id`) `receipts` on(`receipts`.`order_id` = `o`.`order_id`)) ;
 
 -- --------------------------------------------------------
 

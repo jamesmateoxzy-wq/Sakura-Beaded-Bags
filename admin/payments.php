@@ -5,11 +5,8 @@
  * Admin-facing payments register based on the Sakura Phase 3 Figma screen.
  * This page shares the existing Sakura header, footer and UI utilities.
  *
- * Until the MySQL order/payment API is ready, the only editable data is
- * clearly labeled DEMO data stored in this browser tab (sessionStorage).
- * No payment on this page is sent to a payment provider or saved to MySQL.
- *
- * Backend handoff: docs/PAYMENTS_SALES_HANDOFF.md
+ * Payment records and summaries are loaded from the protected MySQL API.
+ * Staff verify and enter receipts; no payment gateway is connected.
  */
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/config.php';
@@ -31,7 +28,15 @@ $pageJs = 'payments-live.js';
 require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="payments-page" aria-label="Payments and Sales">
-    <div class="pay-mode-banner" role="status">Prototype records for this browser tab.</div>
+    <?php if ($isDemo): ?>
+        <div class="pay-mode-banner" role="status">
+            <strong>Loading payments</strong> &middot; Connecting to the MySQL payment ledger.
+        </div>
+    <?php else: ?>
+        <div class="pay-mode-banner" role="status">
+            <strong>Loading payments</strong> &middot; Connecting to the MySQL payment ledger.
+        </div>
+    <?php endif; ?>
 
     <div class="pay-stats" aria-label="Payment summary">
         <article class="card pay-stat">
@@ -69,6 +74,8 @@ require_once __DIR__ . '/../includes/header.php';
                     <option value="all">All statuses</option>
                     <option value="paid">Fully Paid</option>
                     <option value="partial">Partial</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="refunded">Refunded</option>
                 </select>
                 <button type="button" class="btn btn-primary pay-record-shortcut" id="recordPaymentShortcut">+ &nbsp; Record Payment</button>
             </div>

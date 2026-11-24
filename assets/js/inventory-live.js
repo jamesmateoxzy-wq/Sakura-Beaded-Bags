@@ -103,7 +103,8 @@
     $('invRows').innerHTML = shown.map(function(m) {
       return '<tr><td>' + esc(m.id) + '</td><td>' + esc(m.name) + '</td><td>' + esc(m.unit) +
         '</td><td>' + money(m.cost) + '</td><td>' + esc(m.stock) + '</td><td>' + esc(m.min) +
-        '</td><td>' + badge(status(m)) + '</td></tr>';
+        '</td><td>' + badge(status(m)) + '</td><td><button type="button" class="btn btn-outline btn-sm" data-remove-material="' +
+        esc(m.id) + '"' + (busy ? ' disabled' : '') + '>Remove</button></td></tr>';
     }).join('');
     $('invEmpty').hidden = shown.length !== 0;
     options($('invStockInMaterial'));
@@ -149,6 +150,25 @@
     $('invAdjustBalance').textContent = m ? m.stock + ' ' + m.unit : '—';
   }
   $('invSearch').addEventListener('input',render);
+  $('invRows').addEventListener('click',async function(e) {
+    var button=e.target.closest('[data-remove-material]');
+    if(!button||busy)return;
+    var selected=material(button.dataset.removeMaterial);
+    if(!selected)return;
+    if(!window.confirm('Remove '+selected.name+' from active inventory? Product recipes, order history and inventory movements will be preserved.'))return;
+    busy=true;toggleButtons();
+    var removed=false;
+    try {
+      var result=await request({action:'remove_material',id:selected.id});
+      removed=true;
+      await reload();
+      notify(result.message||'Material removed from active inventory.');
+    } catch(error) {
+      notify(removed?'Material was removed, but the list could not refresh: '+error.message:'Could not remove material: '+error.message);
+    } finally {
+      busy=false;render();toggleButtons();
+    }
+  });
   $('invHistoryToggle').addEventListener('click',function() {expanded=!expanded; render();});
   $('invOpenCreate').addEventListener('click',function() {if(!ready)return; $('invCreateForm').reset(); err('invCreateError',''); open('invCreateModal');});
   $('invCreateForm').addEventListener('submit',function(e) {

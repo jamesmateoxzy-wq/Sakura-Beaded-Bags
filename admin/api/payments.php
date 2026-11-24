@@ -8,12 +8,12 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function pay_out(array $payload, int $status = 200): never {
+function pay_out(array $payload, int $status = 200): void {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
-function pay_fail(string $message, int $status = 422): never {
+function pay_fail(string $message, int $status = 422): void {
     pay_out(['ok' => false, 'error' => $message], $status);
 }
 function pay_csrf(): string {
@@ -66,14 +66,14 @@ if (!in_array($method, ['GET','POST'], true)) {
     header('Allow: GET, POST'); pay_fail('Method not allowed.', 405);
 }
 
-function pay_read(PDO $pdo): never {
+function pay_read(PDO $pdo): void {
     $rows = $pdo->query("SELECT o.order_id, o.order_date, o.due_date, o.production_status, o.archived_at,
         c.full_name, b.order_total, b.amount_paid, b.balance_due, b.payment_status
         FROM customer_orders o JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
         ORDER BY o.order_id DESC")->fetchAll(PDO::FETCH_ASSOC);
     $orders = []; $byOrder = [];
-    $sales = 0; $received = 0; $outstanding = 0;
+    $sales = 0; $received = 0; $outstanding = 0; $orderValue = 0;
     foreach ($rows as $r) {
         $id = (int)$r['order_id'];
         $item = [
@@ -85,20 +85,24 @@ function pay_read(PDO $pdo): never {
         ];
         $orders[] = $item; $byOrder[$id] = $item;
         if ($item['status'] !== 'Cancelled') {
-            $sales += pay_cents($r['order_total']);
+            $orderValue += pay_cents($r['order_total']);
+            $sales += pay_cents($r['amount_paid']);
             $received += pay_cents($r['amount_paid']);
             $outstanding += pay_cents($r['balance_due']);
         }
     }
     $payments = []; $running = [];
-    $stmt = $pdo->query('SELECT payment_id, order_id, payment_date, amount, payment_method, reference_number
+    $stmt = $pdo->query('SELECT payment_id, order_id, payment_date, amount, payment_status, payment_method, reference_number
         FROM payments ORDER BY payment_date ASC, payment_id ASC');
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $oid = (int)$r['order_id'];
         if (!isset($byOrder[$oid])) continue;
         $order = $byOrder[$oid];
-        $running[$oid] = ($running[$oid] ?? 0) + pay_cents($r['amount']);
-        $balanceAfter = max(0, pay_cents($order['total']) - $running[$oid]);
+        $paymentStatus = (string)$r['payment_status'];
+        if ($paymentStatus === 'Successful' && $order['status'] !== 'Cancelled') {
+            $running[$oid] = ($running[$oid] ?? 0) + pay_cents($r['amount']);
+        }
+        $balanceAfter = max(0, pay_cents($order['total']) - ($running[$oid] ?? 0));
         $payments[] = [
             'id' => pay_code((int)$r['payment_id'],'SLP'), 'rawId' => (int)$r['payment_id'],
             'orderId' => $order['id'], 'customer' => $order['customer'],
@@ -107,6 +111,7 @@ function pay_read(PDO $pdo): never {
             'method' => (string)$r['payment_method'],
             'reference' => (string)($r['reference_number'] ?? ''),
             'date' => substr((string)$r['payment_date'], 0, 10),
+            'paymentStatus' => $paymentStatus,
             'status' => $balanceAfter === 0 ? 'Fully Paid' : 'Partial',
         ];
     }
@@ -115,11 +120,12 @@ function pay_read(PDO $pdo): never {
         'ok' => true, 'csrf' => pay_csrf(), 'orders' => $orders, 'payments' => $payments,
         'summary' => [
             'totalSales' => $sales / 100, 'received' => $received / 100,
+            'orderValue' => $orderValue / 100,
             'outstanding' => $outstanding / 100,
-            'collectionRate' => $sales > 0 ? round($received / $sales * 100, 1) : 0,
+            'collectionRate' => $orderValue > 0 ? round($received / $orderValue * 100, 1) : 0,
             'orderCount' => count(array_filter($orders, static fn($r) => $r['status'] !== 'Cancelled')),
         ],
-        'note' => 'Sales are non-cancelled booked order values. No live payment gateway is connected.',
+        'note' => 'Total sales include successful payments only; cancelled and refunded payments are excluded.',
     ]);
 }
 
@@ -162,7 +168,8 @@ function pay_create(PDO $pdo, array $data): array {
     $totalStmt->execute([$orderId]);
     $total = pay_cents((string)$totalStmt->fetchColumn());
     if ($total <= 0) throw new InvalidArgumentException('The order has no billable items.');
-    $paidStmt = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE order_id = ?');
+    $paidStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments
+        WHERE order_id = ? AND payment_status = 'Successful'");
     $paidStmt->execute([$orderId]);
     $paid = pay_cents((string)$paidStmt->fetchColumn());
     $cents = pay_cents($amount);
@@ -190,6 +197,47 @@ function pay_create(PDO $pdo, array $data): array {
         'balance' => ($total - $paid - $cents) / 100, 'message' => 'Payment saved to MySQL.'];
 }
 
+function pay_update_status(PDO $pdo, array $data): array {
+    $paymentId = pay_id($data['paymentId'] ?? null, 'payment');
+    $status = $data['status'] ?? null;
+    if (!is_string($status) || !in_array($status, ['Cancelled', 'Refunded'], true)) {
+        throw new InvalidArgumentException('Choose Cancelled or Refunded for this payment.');
+    }
+
+    $pdo->beginTransaction();
+    $findOrder = $pdo->prepare('SELECT order_id FROM payments WHERE payment_id = ?');
+    $findOrder->execute([$paymentId]);
+    $orderId = $findOrder->fetchColumn();
+    if ($orderId === false) throw new InvalidArgumentException('Payment was not found.');
+
+    $lockOrder = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $lockOrder->execute([(int)$orderId]);
+    if (!$lockOrder->fetchColumn()) throw new InvalidArgumentException('The payment order was not found.');
+
+    $lockPayment = $pdo->prepare('SELECT payment_status FROM payments WHERE payment_id = ? FOR UPDATE');
+    $lockPayment->execute([$paymentId]);
+    $currentStatus = $lockPayment->fetchColumn();
+    if ($currentStatus === $status) {
+        $pdo->commit();
+        return ['ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+            'message' => 'Payment is already marked ' . strtolower($status) . '.'];
+    }
+    if ($currentStatus !== 'Successful') {
+        throw new InvalidArgumentException('Only successful payments can be cancelled or refunded.');
+    }
+
+    $note = $status === 'Refunded'
+        ? 'Marked refunded in Payments & Sales.'
+        : 'Marked cancelled in Payments & Sales.';
+    $update = $pdo->prepare("UPDATE payments SET payment_status = ?,
+        remarks = CONCAT_WS(CHAR(10), NULLIF(remarks, ''), ?) WHERE payment_id = ?");
+    $update->execute([$status, $note, $paymentId]);
+    $pdo->commit();
+
+    return ['ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+        'message' => 'Payment marked ' . strtolower($status) . '. Sales and order balances were recalculated.'];
+}
+
 try {
     $pdo = sbb_db();
     if ($method === 'GET') pay_read($pdo);
@@ -200,8 +248,9 @@ try {
     if (!is_string($raw) || strlen($raw) > 16384) pay_fail('Request too large.');
     $input = json_decode($raw, true);
     if (!is_array($input)) pay_fail('Invalid JSON.');
-    if (($input['action'] ?? '') !== 'record_payment') pay_fail('Unknown action.');
-    pay_out(pay_create($pdo, $input), 201);
+    if (($input['action'] ?? '') === 'record_payment') pay_out(pay_create($pdo, $input), 201);
+    if (($input['action'] ?? '') === 'update_payment_status') pay_out(pay_update_status($pdo, $input));
+    pay_fail('Unknown action.');
 } catch (InvalidArgumentException $e) {
     if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     pay_fail($e->getMessage(), 422);

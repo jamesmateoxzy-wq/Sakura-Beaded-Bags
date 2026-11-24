@@ -1,7 +1,7 @@
 <?php
 /**
  * Sakura Beaded Bags: local-first Inventory JSON API.
- * Requires the SBB shared PDO connection in includes/db.php.
+ * Requires the SBB shared PDO connection and sales/soft-deletion migration.
  * GET: get materials and recent inventory movements.
  * POST: add_material, stock_in, correction. Writes use transactions.
  *
@@ -19,12 +19,12 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function api_out(array $data, int $code = 200): never {
+function api_out(array $data, int $code = 200): void {
     http_response_code($code);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
-function api_error(string $message, int $code = 422): never {
+function api_error(string $message, int $code = 422): void {
     api_out(['ok' => false, 'error' => $message], $code);
 }
 function check_whole($value, string $label, bool $allowZero = true): int {
@@ -97,7 +97,7 @@ try {
         if (empty($_SESSION['sbb_inventory_csrf'])) {
             $_SESSION['sbb_inventory_csrf'] = bin2hex(random_bytes(32));
         }
-        $rows = $pdo->query('SELECT material_id, material_name, unit, unit_cost, quantity_on_hand, low_stock_threshold FROM materials ORDER BY material_id')->fetchAll();
+        $rows = $pdo->query('SELECT material_id, material_name, unit, unit_cost, quantity_on_hand, low_stock_threshold FROM materials WHERE is_active = 1 ORDER BY material_id')->fetchAll();
         $materials = array_map(static function (array $r): array {
             return [
                 'id' => sprintf('MAT-%03d', (int) $r['material_id']),
@@ -153,6 +153,33 @@ try {
         api_out(['ok' => true, 'message' => 'Material saved in MySQL.']);
     }
 
+    if ($action === 'remove_material') {
+        $id = check_id($body['id'] ?? null);
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT is_active FROM materials WHERE material_id = ? FOR UPDATE');
+        $stmt->execute([$id]);
+        $active = $stmt->fetchColumn();
+        if ($active === false) throw new InvalidArgumentException('Material not found. Refresh and retry.');
+
+        $assigned = $pdo->prepare('SELECT COUNT(*) FROM product_materials WHERE material_id = ?');
+        $assigned->execute([$id]);
+        $productCount = (int) $assigned->fetchColumn();
+        $movements = $pdo->prepare('SELECT COUNT(*) FROM inventory_movements WHERE material_id = ?');
+        $movements->execute([$id]);
+        $movementCount = (int) $movements->fetchColumn();
+
+        if ((int)$active === 1) {
+            $pdo->prepare('UPDATE materials SET is_active = 0 WHERE material_id = ?')->execute([$id]);
+        }
+        $pdo->commit();
+        $message = $productCount > 0 || $movementCount > 0
+            ? 'Material removed from active inventory. ' . $productCount . ' product recipe(s) and '
+                . $movementCount . ' inventory movement(s) remain intact.'
+            : 'Material removed from active inventory.';
+        api_out(['ok' => true, 'id' => sprintf('MAT-%03d', $id), 'message' => $message,
+            'productRecipes' => $productCount, 'inventoryMovements' => $movementCount]);
+    }
+
     if ($action === 'stock_in' || $action === 'correction') {
         $id = check_id($body['id'] ?? null);
         $quantity = check_whole($body['quantity'] ?? null, 'Quantity', false);
@@ -164,7 +191,7 @@ try {
         }
         $delta = $action === 'correction' && $direction === 'out' ? -$quantity : $quantity;
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('SELECT quantity_on_hand FROM materials WHERE material_id = ? FOR UPDATE');
+        $stmt = $pdo->prepare('SELECT quantity_on_hand FROM materials WHERE material_id = ? AND is_active = 1 FOR UPDATE');
         $stmt->execute([$id]);
         $found = $stmt->fetch();
         if (!$found) throw new InvalidArgumentException('Material not found. Refresh and try again.');

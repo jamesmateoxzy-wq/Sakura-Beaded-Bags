@@ -1,8 +1,6 @@
 <?php
 /**
- * Order Management — Sakura admin frontend.
- * Order records are kept in the browser session.
- * Handoff: docs/OPERATIONS_HANDOFF.md
+ * Order Management — Sakura admin frontend backed by the protected MySQL API.
  */
 $pageTitle = 'Order Management';
 $pageSubtitle = 'Manage each order, from the first bead to delivery.';

@@ -1,8 +1,6 @@
 <?php
 /**
- * Inventory Management — Sakura admin frontend.
- * Demo changes are browser-session only; production requires a protected PHP/MySQL API.
- * Handoff: docs/OPERATIONS_HANDOFF.md
+ * Inventory Management — Sakura admin frontend backed by the protected MySQL API.
  */
 $pageTitle = 'Inventory Management';
 $pageSubtitle = 'Every bead accounted for, every bag ready to begin.';
@@ -56,7 +54,7 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
     <div class="inv-table-wrap">
       <table class="inv-table">
-        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Cost</th><th>Quantity</th><th>Threshold</th><th>Status</th></tr></thead>
+        <thead><tr><th>ID</th><th>Name</th><th>Unit</th><th>Cost</th><th>Quantity</th><th>Threshold</th><th>Status</th><th>Action</th></tr></thead>
         <tbody id="invRows"></tbody>
       </table>
       <p class="inv-empty" id="invEmpty" hidden>No materials found.</p>

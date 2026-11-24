@@ -22,7 +22,7 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['nSave','sSave','sRemoveProduct','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
   async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
@@ -181,7 +181,9 @@
   function addMaterialModal(context,callback) {
     if(!materials.length){toast('Add materials in Inventory Management first.');return;}
     onAddMaterial=callback; $('amContext').textContent=context;
-    $('amMaterial').innerHTML=materials.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+' · '+esc(m.stock)+' '+esc(m.unit)+' available</option>').join('');
+    const activeMaterials=materials.filter(m=>m.active);
+    if(!activeMaterials.length){toast('No active materials are available. Add or reactivate a material in Inventory Management first.');return;}
+    $('amMaterial').innerHTML=activeMaterials.map(m=>'<option value="'+esc(m.id)+'">'+esc(m.name)+' · '+esc(m.stock)+' '+esc(m.unit)+' available</option>').join('');
     $('amQty').value='1'; $('amCost').readOnly=true; materialAmount();
     S.openModal('addMaterialModal');
   }
@@ -258,6 +260,20 @@
       $('sMarkup').value=draft.markup;summary('s',draft,false);
     });
     $('sReset').addEventListener('click',()=>{if(selectedId!==null)selectProduct(selectedId);toast('Unsaved changes reset.');});
+    $('sRemoveProduct').addEventListener('click',async()=>{
+      if(pending||!draft)return;
+      if(!window.confirm('Remove '+draft.name+' from the active product list? Existing orders and payment history will be preserved.'))return;
+      setBusy(true);
+      let removed=false;
+      try{
+        const result=await request({action:'remove_product',id:selectedId});
+        removed=true;
+        await reloadAndSelect(null);
+        toast(result.message||'Product removed from the active product list.');
+      }catch(e){
+        toast(removed?'Product was removed, but the list could not refresh: '+e.message:'Could not remove product: '+e.message);
+      }finally{setBusy(false);}
+    });
     $('sAddMaterial').addEventListener('click',()=>{if(!draft)return;addMaterialModal('Adding to '+draft.name+' costing sheet',async entry=>{
       const previous=copy(draft.materials);
       addToRecipe(draft.materials,entry);renderSelectedMaterials();summary('s',draft);
