@@ -157,7 +157,7 @@
       var inGroup = (activeGroup === 'all' && !archived(o)) ||
         (activeGroup === 'production' && currentProduction(o)) ||
         (activeGroup === 'archived' && archived(o));
-      return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered') || (filter === 'In Transit' && o.delivery === 'In Transit')) &&
+      return inGroup && (filter === 'all' || (filter === 'overdue' && o.overdue) || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered') || (filter === 'In Transit' && o.delivery === 'In Transit')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
     }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
     $('ordTotal').textContent = orders.filter(function (o) {
@@ -169,9 +169,9 @@
     $('ordNew').hidden = isArchiveView;
     $('ordArchiveActions').hidden = !isArchiveView;
     $('ordRows').innerHTML = shown.map(function (o) {
-      return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
+      return '<tr' + (' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
-        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
+        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + (o.overdue ? ' <span class="badge badge-pink">Overdue</span>' : '') + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
@@ -181,7 +181,7 @@
         '" tabindex="0" role="button" aria-label="View order ' + esc(o.id) + '">' +
         '<div class="order-card-top"><span class="order-number">' + formatId(i+1) + '</span><span>' + esc(o.id) + '</span></div>' +
         '<h3>' + esc(o.customer) + '</h3><div class="order-card-product"><span>' + esc(itemSummary(o)) +
-        '</span><strong>' + money(o.total) + '</strong></div><p class="order-card-due">Due ' + dateText(o.dueDate || o.date) + '</p>' +
+        '</span><strong>' + money(o.total) + '</strong></div><p class="order-card-due">Due ' + dateText(o.dueDate || o.date) + (o.overdue ? ' · Overdue' : '') + '</p>' +
         '<div class="order-card-badges">' + badge(o.status) + badge(o.payment) + '</div>' +
         '<span class="order-card-link">Click to view details →</span></article>';
     }).join('');
@@ -202,7 +202,10 @@
     $('ordDetailCustomer').textContent = o.customer;
     $('ordDetailAddress').textContent = o.address || 'Address not provided';
     $('ordDetailDate').textContent = dateText(o.date);
-    $('ordDetailDueDate').textContent = dateText(o.dueDate || o.date);
+    $('ordDetailDueDate').textContent = dateText(o.dueDate || o.date) + (o.overdue ? ' · Overdue' : '');
+    $('ordHistory').replaceChildren();
+    for (const h of (o.history||[])) { const li=document.createElement('li'); li.textContent=h.changed_at+' · '+h.status_type+': '+(h.old_status?deliveryLabel(h.old_status)+' → ':'')+deliveryLabel(h.new_status); $('ordHistory').append(li); }
+    if(!(o.history||[]).length) $('ordHistory').textContent='No recorded status changes.';
     $('ordDetailProduct').textContent = itemSummary(o);
     $('ordDetailItemPrice').textContent = money(o.total);
     $('ordDetailTotal').textContent = money(o.total);
