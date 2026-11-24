@@ -14,7 +14,7 @@ require_once __DIR__ . '/../includes/config.php';
 if (!empty($_SESSION['user_id'])) { header('Location: dashboard.php'); exit; }
 
 // DEMO ONLY (DEMO_MODE in config.php): lets you preview the system before Google is set up
-if (DEMO_MODE && isset($_GET['demo'])) {
+if (DEMO_MODE && isset($_GET['demo']) && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1','::1'], true) && preg_match('/^(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?$/iD', (string)($_SERVER['HTTP_HOST'] ?? ''))) {
     $_SESSION['user_id']   = 'demo';
     $_SESSION['user_name'] = 'Sakura Admin';
     $_SESSION['user_role'] = 'Admin';
@@ -22,12 +22,23 @@ if (DEMO_MODE && isset($_GET['demo'])) {
     exit;
 }
 
-$error = substr($_GET['error'] ?? '', 0, 200);
+$error = substr(is_string($_GET['error'] ?? null) ? $_GET['error'] : '', 0, 200);
 $notSetUp = strpos(GOOGLE_CLIENT_ID, 'PASTE-') === 0;
 
-// absolute URL of the file Google sends the token to
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/google-callback.php';
+// An explicit public HTTPS origin works even behind a TLS-terminating proxy.
+// Never trust arbitrary forwarded headers or build a public callback from Host.
+$host = strtolower((string)($_SERVER['HTTP_HOST'] ?? ''));
+$isLoopback = preg_match('/^(localhost|127\\.0\\.0\\.1)(:[0-9]{1,5})?$/D', $host)
+    && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1','::1'], true);
+$publicOrigin = rtrim((string)getenv('SBB_PUBLIC_ORIGIN'), '/');
+$validPublicOrigin = preg_match('~^https://(?:[a-z0-9-]+\\.)+[a-z0-9-]+(?::[0-9]{1,5})?$~iD', $publicOrigin)
+    && filter_var(parse_url($publicOrigin, PHP_URL_HOST), FILTER_VALIDATE_IP) === false;
+$origin = $isLoopback ? 'http://' . $host : ($validPublicOrigin ? $publicOrigin : '');
+$loginUri = $origin . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/google-callback.php';
+$canGoogleLogin = !$notSetUp && $origin !== '';
+if (!$isLoopback && $validPublicOrigin && strtolower((string)parse_url($publicOrigin, PHP_URL_HOST)) !== explode(':',$host)[0]) {
+    $canGoogleLogin = false;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -62,14 +73,18 @@ $loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SC
         <div class="form-alert" role="alert">Google sign-in isn’t set up yet. Add your Client ID in includes/config.php.</div>
       <?php endif; ?>
 
+      <?php if ($canGoogleLogin): ?>
       <div class="google-wrap">
         <div id="googleBtn"
              data-client-id="<?= e(GOOGLE_CLIENT_ID) ?>"
              data-login-uri="<?= e($loginUri) ?>"></div>
       </div>
+      <?php elseif (!$notSetUp): ?>
+        <div class="form-alert" role="status">Google sign-in requires the authorized HTTPS website or localhost on the server computer. This local-network preview cannot sign in.</div>
+      <?php endif; ?>
       <p class="login-note">Only authorized Sakura admin accounts can sign in.</p>
 
-      <?php if (DEMO_MODE): ?>
+      <?php if (DEMO_MODE && $isLoopback): ?>
         <a class="demo-link" href="login.php?demo=1">Preview without Google (demo)</a>
       <?php endif; ?>
 
@@ -77,7 +92,9 @@ $loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SC
     </div>
   </section>
 
+  <?php if ($canGoogleLogin): ?>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="../assets/js/login.js"></script>
+  <?php endif; ?>
 </body>
 </html>
