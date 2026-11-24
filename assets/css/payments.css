@@ -124,3 +124,7 @@
   #printSlip { display: none !important; }
   #slipCard .pay-slip-summary { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+.payments-page .pay-form-card,.payments-page .pay-slip-card{width:min(720px,94vw);max-height:90vh;overflow:auto;box-sizing:border-box;background:#fff;}
+.payments-page .pay-form-card .modal-body{padding:12px 0 0;}
+.payments-page .pay-slip-heading h2{margin-right:auto;}
+@media print{#paymentSlipModal.is-open{display:block!important;position:static!important;background:none!important;}#slipCard{max-height:none!important;overflow:visible!important;}.pay-slip-close{display:none!important;}}
