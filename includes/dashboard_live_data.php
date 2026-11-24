@@ -123,8 +123,13 @@ SQL;
     }
 
     $updatedOn = date('F j, Y');
+    $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+    $overdueStmt=$db->prepare("SELECT COUNT(*) FROM customer_orders WHERE due_date < ? AND archived_at IS NULL AND production_status <> 'Cancelled' AND delivery_status NOT IN ('Delivered','Returned')");
+    $overdueStmt->execute([$today]); $overdueTotal=(int)$overdueStmt->fetchColumn();
 } catch (Throwable $e) {
     error_log('SBB Dashboard MySQL: ' . $e->getMessage());
     http_response_code(500);
-    exit('Dashboard could not load MySQL data. Check your PHP server terminal.');
+    $dashboardError='Dashboard data is unavailable. Check MySQL, the configured database and required migrations, then refresh. Contact the administrator if it persists.';
+    $totalSales=$totalOrders=$pendingOrders=$lowStockTotal=0; $recentOrders=$lowStock=[]; $overdueTotal=0;
+    $monthlySales=[]; for ($i=5;$i>=0;$i--) $monthlySales[date('M',strtotime($month."-01 -$i month"))]=0;
 }
