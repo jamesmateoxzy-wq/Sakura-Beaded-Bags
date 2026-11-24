@@ -39,7 +39,7 @@ require_once __DIR__ . '/../includes/header.php';
       <label class="orders-status-filter">
         <span class="sr-only">Filter by status</span>
         <select id="ordFilter" class="select">
-          <option value="all">Status: All</option>
+          <option value="all">Status: All</option><option value="overdue">Overdue deliveries</option>
           <option value="Pending">Status: Pending</option>
           <option value="In Progress">Status: In Progress</option>
           <option value="Completed">Status: Completed</option>
@@ -133,7 +133,7 @@ require_once __DIR__ . '/../includes/header.php';
           <div class="order-detail-bom" id="ordDetailBom" hidden></div>
         </div>
         <div class="order-detail-total"><span>Total</span><strong id="ordDetailTotal">₱0</strong></div>
-        <span id="ordDetailPayment" class="badge badge-green"></span>
+        <span id="ordDetailPayment" class="badge badge-green"></span><section class="final-history"><h3>Status history</h3><ul id="ordHistory"></ul></section>
       </div>
       <div class="modal-foot order-detail-foot"><div><button type="button" class="btn btn-outline" id="ordShip" hidden>Shipped</button><button type="button" class="btn btn-outline order-cancel-btn" id="ordCancel">Cancel Order</button><button type="button" class="btn btn-outline" id="ordArchive">Archive</button></div><button type="button" class="btn btn-primary" data-close-modal="ordDetailModal">Close</button></div>
     </div>
