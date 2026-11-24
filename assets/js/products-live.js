@@ -22,7 +22,7 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['sPhotoSave','sPhoto','nSave','sSave','sRemoveProduct','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['sPhotoCancel','sPhotoSave','sPhoto','nSave','sSave','sRemoveProduct','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
   async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
@@ -217,6 +217,7 @@
     ).join('') : '<p class="hint">No categories yet.</p>';
   }
   function setup() {
+    $('sPhotoCancel').addEventListener('click',()=>{if(pending)return;$('sPhoto').value='';toast('Photo replacement cancelled.');});
     $('sPhotoSave').addEventListener('click',async()=>{
       if(pending||!draft)return;
       const file=$('sPhoto').files[0];
