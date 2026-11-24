@@ -14,9 +14,11 @@ $pageCss = 'reports.css';
 $pageJs = 'reports-live.js';
 $pageBodyClass = 'reports-layout';
 require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../includes/final_features.php';
+try { $business=sbb_optional_settings(sbb_db()); } catch (Throwable $e) { $business=[]; error_log('SBB business settings: '.$e->getMessage()); }
 ?>
-<section class="ops-page" id="operationsPage" data-module="reports" data-demo="<?= $isDemo ? '1' : '0' ?>">
-  <div class="rep-toolbar">
+<section class="ops-page" id="operationsPage" data-business="<?= e($business['boutique_name']??'Sakura Beaded Bags') ?>" data-module="reports" data-demo="<?= $isDemo ? '1' : '0' ?>">
+  <div class="final-business"><strong><?= e($business['boutique_name']??'Sakura Beaded Bags') ?></strong><small><?= e(implode(' · ',array_filter([$business['address']??'',$business['contact']??'']))) ?></small></div><div class="rep-toolbar">
     <div class="rep-filters">
       <label class="rep-period-control">
         <?= icon('calendar') ?>
