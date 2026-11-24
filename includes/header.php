@@ -26,7 +26,7 @@ $pageBodyClass = $pageBodyClass ?? '';
 
 $userName = $_SESSION['user_name'] ?? 'Sakura Admin';
 $userRole = $_SESSION['user_role'] ?? 'Admin';
-$initials = strtoupper(substr(implode('', array_map(fn($w) => $w[0], explode(' ', trim($userName)))), 0, 2));
+$initials = strtoupper(substr(implode('', array_map(fn($w) => $w[0] ?? '', preg_split('/\s+/', trim($userName)))), 0, 2));
 
 // Sidebar menu: key => [label, link, icon]
 // Teammates: create these pages inside /admin using the same file names.
