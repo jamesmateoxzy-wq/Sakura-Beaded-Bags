@@ -41,7 +41,7 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="card" id="costSheet">
       <h2 id="sTitle"></h2>
       <p class="card-sub" id="sSku"></p>
-      <div class="field"><label for="sPhoto">Replace product photo (JPG, PNG, WebP; up to 4 MB)</label><input class="input" type="file" id="sPhoto" accept="image/jpeg,image/png,image/webp"><button type="button" class="btn btn-outline btn-sm" id="sPhotoSave">Save photo</button></div>
+      <div class="field"><label for="sPhoto">Replace product photo (JPG, PNG, WebP; up to 4 MB)</label><input class="input" type="file" id="sPhoto" accept="image/jpeg,image/png,image/webp"><div class="photo-replace-actions"><button type="button" class="btn btn-outline btn-sm" id="sPhotoCancel">Cancel</button><button type="button" class="btn btn-primary btn-sm" id="sPhotoSave">Save photo</button></div></div>
 
       <div class="form-row sheet-top">
         <div class="field">
