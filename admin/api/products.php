@@ -241,9 +241,11 @@ try {
         $stmt = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_id = ? FOR UPDATE');
         $stmt->execute([$id]);
         if ($stmt->fetchColumn() === false) throw new InvalidArgumentException('Category not found. Refresh and retry.');
-        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE category_id = ? LIMIT 1 FOR UPDATE');
+        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE category_id = ? AND is_active = 1 LIMIT 1 FOR UPDATE');
         $stmt->execute([$id]);
-        if ($stmt->fetchColumn() !== false) throw new InvalidArgumentException('This category is linked to existing products, including removed products. Reassign products before removing the category.');
+        if ($stmt->fetchColumn() !== false) throw new InvalidArgumentException('This category still contains active products. Move or remove them first.');
+        // Preserve inactive product records and their order relationships.
+        $pdo->prepare('UPDATE products SET category_id = NULL WHERE category_id = ? AND is_active = 0')->execute([$id]);
         $pdo->prepare('DELETE FROM product_categories WHERE category_id = ?')->execute([$id]);
         $pdo->commit();
         prod_out(['ok' => true, 'message' => 'Category removed from MySQL.']);
