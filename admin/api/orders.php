@@ -252,6 +252,9 @@ function ord_create(PDO $pdo, array $data): array {
         VALUES (?, ?, 'Pending', 'Not Scheduled', ?, ?)");
     $stmt->execute([$customerId, $dueDate, $address, trim($notes)]);
     $orderId = (int) $pdo->lastInsertId();
+    $history=$pdo->prepare('INSERT INTO order_status_history (order_id,status_type,old_status,new_status,notes) VALUES (?,?,NULL,?,?)');
+    $history->execute([$orderId,'Production','Pending','Order created']);
+    $history->execute([$orderId,'Delivery','Not Scheduled','Order created']);
     $stmt = $pdo->prepare('INSERT INTO order_items
         (order_id, product_id, quantity, unit_price, estimated_unit_cost) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$orderId, $productId, $qty, $unitPrice, $unitCostStr]);
