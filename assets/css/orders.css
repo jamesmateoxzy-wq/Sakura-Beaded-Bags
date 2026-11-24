@@ -294,3 +294,5 @@
   .orders-status-filter .select{min-width:150px}
   .orders-layout .order-dialog-head,.orders-layout .order-dialog-foot{padding-right:16px;padding-left:16px}
 }
+
+.orders-layout [hidden]{display:none!important}
