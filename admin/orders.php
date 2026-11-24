@@ -48,7 +48,7 @@ require_once __DIR__ . '/../includes/header.php';
       </label>
     </div>
     <div class="table-wrap"><table class="table orders-table">
-      <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Item</th><th>Total</th><th>Production</th><th>Delivery</th><th>Payment</th></tr></thead>
+      <thead><tr><th>Order ID</th><th>Date</th><th>Customer</th><th>Item</th><th>Total</th><th>Production</th><th>Delivery</th><th>Payment</th><th id="ordArchiveActions" hidden>Actions</th></tr></thead>
       <tbody id="ordRows"></tbody>
     </table></div>
     <p class="ops-empty" id="ordEmpty" hidden>No orders match your search.</p>
