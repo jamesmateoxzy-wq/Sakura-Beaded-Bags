@@ -36,6 +36,7 @@ $nav = [
     'products'  => ['Product Costing & Pricing', 'products.php',  'costing'],
     'inventory' => ['Inventory Management',      'inventory.php', 'inventory'],
     'payments'  => ['Payments & Sales',          'payments.php',  'payments'],
+    'expenses'  => ['Operating Expenses', 'expenses.php', 'payments'],
     'reports'   => ['Financial Reports',         'reports.php',   'reports'],
 ];
 ?>
@@ -93,6 +94,7 @@ $nav = [
         <div class="dropdown" id="profileMenu" role="menu">
           <a href="profile.php" role="menuitem"><?= icon('user') ?> My Profile</a>
           <a href="settings.php" role="menuitem"><?= icon('settings') ?> Account Settings</a>
+          <a href="activity.php" role="menuitem"><?= icon('reports') ?> Activity Log</a>
           <a href="logout.php" role="menuitem"><?= icon('logout') ?> Logout</a>
         </div>
       </div>
