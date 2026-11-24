@@ -134,13 +134,13 @@ function pay_create(PDO $pdo, array $data): array {
     $amount = pay_amount($data['amount'] ?? null);
     $date = pay_date($data['date'] ?? null);
     $method = $data['method'] ?? null;
-    if (!is_string($method) || !in_array($method, ['Cash','GCash','Bank Transfer'], true)) {
+    if (!is_string($method) || !in_array($method, ['GCash','Bank Transfer'], true)) {
         throw new InvalidArgumentException('Select a valid payment method.');
     }
     $reference = $data['reference'] ?? '';
     if (!is_string($reference) || strlen(trim($reference)) > 80) throw new InvalidArgumentException('Reference is limited to 80 characters.');
     $reference = trim($reference);
-    if ($method !== 'Cash' && $reference === '') throw new InvalidArgumentException('GCash and bank transfers require a reference.');
+    if ($reference === '') throw new InvalidArgumentException('GCash and bank transfers require a reference.');
     $key = pay_key($data['requestKey'] ?? null);
 
     $pdo->beginTransaction();
@@ -185,11 +185,6 @@ function pay_create(PDO $pdo, array $data): array {
         VALUES (?, ?, ?, ?, ?)');
     $insert->execute([$orderId, $date . ' 12:00:00', $amount, $method, $reference ?: null]);
     $paymentId = (int)$pdo->lastInsertId();
-    if ($reference === '') {
-        $reference = 'CASH-' . str_pad((string)$paymentId, 6, '0', STR_PAD_LEFT);
-        $update = $pdo->prepare('UPDATE payments SET reference_number = ? WHERE payment_id = ?');
-        $update->execute([$reference, $paymentId]);
-    }
     $mark = $pdo->prepare('UPDATE payment_submission_keys SET payment_id = ? WHERE request_key = ?');
     $mark->execute([$paymentId, $key]);
     $pdo->commit();
