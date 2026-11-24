@@ -7,8 +7,10 @@ header('X-Content-Type-Options: nosniff');
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/final_features.php';
 
 function pay_out(array $payload, int $status = 200): void {
+    if (($payload['ok']??false) && !($payload['duplicate']??false) && ($_SERVER['REQUEST_METHOD']??'')==='POST') sbb_log_success('Payments',$GLOBALS['input']['action']??null);
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
