@@ -1,11 +1,5 @@
 <?php
-/**
- * MY PROFILE  (frontend)
- * ------------------------------------------------------------
- * Name, email and photo come from the Google sign-in (saved in the session).
- * Backend teammate: save "full_name" and "phone" to the users table, then
- * remove the data-demo attribute from the <form> so it posts for real.
- */
+/** Google-backed administrator profile with database persistence. */
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/final_features.php';
 sbb_admin_guard();
