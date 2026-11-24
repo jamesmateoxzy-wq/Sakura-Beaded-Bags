@@ -82,3 +82,38 @@ body.modal-open { overflow: hidden; }          /* page behind a pop-up doesn't s
 }
 
 .photo-replace-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
+/* Mobile regression: override late desktop-specific rules on narrow screens. */
+@media screen and (max-width:600px) {
+  .app .content { max-width:100%; }
+  .app .profile-btn { max-width:45vw; }
+  .app .dropdown { max-width:calc(100vw - 24px); overflow-wrap:anywhere; }
+  .orders-layout .orders-cards { grid-template-columns:minmax(0,1fr); }
+  .orders-layout .orders-filters { flex-wrap:wrap; }
+  .orders-layout .orders-search,.orders-layout .orders-status-filter { min-width:0; flex:1 1 100%; }
+  .orders-layout .orders-status-filter .select { width:100%; }
+  .orders-layout .orders-tab { font-size:12px; min-height:40px; }
+  .orders-layout .order-modal,.inventory-layout .inv-dialog { min-height:0; height:auto; max-height:calc(100dvh - 12px); max-width:100%; border-radius:18px 18px 0 0; }
+  .orders-layout .order-create-top,.orders-layout .order-create-middle,.orders-layout .order-cost-inputs { grid-template-columns:minmax(0,1fr); }
+  .orders-layout .order-field .input,.orders-layout .order-field .select,.orders-layout .order-field .textarea,
+  .inventory-layout .inv-dialog-field>input,.inventory-layout .inv-dialog-field>select,.inventory-layout .inv-control input,.inventory-layout .inv-control select { min-height:44px; height:auto; font-size:16px; }
+  .orders-layout .order-field label,.inventory-layout .inv-dialog-field label { font-size:13px; }
+  .orders-layout .order-dialog-foot,.orders-layout .order-detail-foot,.inventory-layout .inv-dialog-foot { flex-shrink:0; flex-wrap:wrap; }
+  .orders-layout .order-detail-body,.orders-layout .order-create-body,.inventory-layout .inv-dialog-body { min-height:0; overflow-y:auto; }
+  .inventory-layout .inv-table-wrap { max-height:none; overflow:auto; }
+  .inventory-layout .inv-table { min-width:680px; }
+  .payments-page .pay-form-card,.payments-page .pay-slip-card { width:100%; max-height:calc(100dvh - 12px); }
+  .pay-slip-summary { grid-template-columns:minmax(0,1fr); }
+  .pay-slip-meta,.pay-slip-heading { flex-wrap:wrap; }
+  .pay-search { min-width:0; width:100%; }
+  .pay-form-grid { grid-template-columns:minmax(0,1fr); }
+  .pay-form-grid > * { grid-column:1 / -1; min-width:0; }
+  .reports-layout .rep-analysis-card,.reports-layout .rep-glance-card { height:auto; min-height:0; }
+  .reports-layout .rep-stat { height:auto; overflow-wrap:anywhere; }
+  .reports-layout .rep-analysis-table { table-layout:fixed; overflow-wrap:anywhere; }
+  .prod-detail .summary { grid-template-columns:minmax(0,1fr); }
+  .account-grid .card { overflow-wrap:anywhere; }
+}
+@media screen and (max-width:380px) {
+  .stats,.reports-layout .rep-stats,.inventory-layout .ops-stats { grid-template-columns:minmax(0,1fr); }
+}
