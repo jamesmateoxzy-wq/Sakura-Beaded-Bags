@@ -152,18 +152,18 @@
         await refresh(payment.id);
         notify(result.message||'Payment status updated.');
       }catch(error){
-        setError(error.message||'Could not update payment status.');
+        notify(error.message||'Could not update payment status.');
         await refresh().catch(()=>{});
       }finally{busy=false;renderOrderOptions();}
       return;
     }
     const b=e.target.closest('[data-slip]');
-    if(b){chosenSlip=b.dataset.slip;renderSlip();}
+    if(b){chosenSlip=b.dataset.slip;renderSlip();Sakura.openModal('paymentSlipModal');}
   });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
   $('paymentOrder').addEventListener('change', updateBalanceHint);
   $('paymentMethod').addEventListener('change',updateReference);
-  $('recordPaymentShortcut').addEventListener('click',()=>{$('recordPaymentCard').scrollIntoView({behavior:'smooth',block:'center'});$('paymentOrder').focus();});
+  $('recordPaymentShortcut').addEventListener('click',()=>{setError('');Sakura.openModal('recordPaymentModal');});
   $('printSlip').addEventListener('click',()=>{if(chosenSlip)window.print();});
   $('recordPaymentForm').addEventListener('submit', async e => {
     e.preventDefault();
@@ -181,6 +181,8 @@
       updateReference();
       $('paymentSearch').value='';$('paymentFilter').value='all';page=1;
       await refresh(result.paymentId);
+      Sakura.closeModal('recordPaymentModal');
+      Sakura.openModal('paymentSlipModal');
       notify(result.message || 'Payment saved in MySQL.');
     } catch(error) { setError(error.message || 'Could not save payment.'); await refresh().catch(()=>{}); }
     finally { busy=false; renderOrderOptions(); }
@@ -198,7 +200,7 @@
       const option=Array.from($('paymentOrder').options).find(o=>o.value===wanted || o.textContent.startsWith(wanted+' '));
       if(option) $('paymentOrder').value=option.value;
       updateBalanceHint();
-      $('recordPaymentCard').scrollIntoView({block:'center'});
+      Sakura.openModal('recordPaymentModal');
     }
   }).catch(error=>{setError('Could not load payments: '+error.message);notify('Payments API unavailable. Check PHP server terminal.');});
 })();

@@ -102,7 +102,7 @@
     $('invStockInCount').textContent = stockInCount;
     $('invRows').innerHTML = shown.map(function(m) {
       return '<tr><td>' + esc(m.id) + '</td><td>' + esc(m.name) + '</td><td>' + esc(m.unit) +
-        '</td><td>' + money(m.cost) + '</td><td>' + esc(m.stock) + '</td><td>' + esc(m.min) +
+        '</td><td>' + money(m.cost) + '</td><td title="Actual stock: ' + esc(m.stock) + '">' + esc(Math.floor(Number(m.stock))) + '</td><td>' + esc(m.min) +
         '</td><td>' + badge(status(m)) + '</td><td><button type="button" class="btn btn-outline btn-sm" data-remove-material="' +
         esc(m.id) + '"' + (busy ? ' disabled' : '') + '>Remove</button></td></tr>';
     }).join('');

@@ -215,6 +215,9 @@
     $('ordArchive').disabled = Boolean(o.archived);
     var actionText = statusAction(o);
     advanceButton.hidden = !actionText || Boolean(o.archived);
+    advanceButton.style.display = advanceButton.hidden ? 'none' : '';
+    $('ordCancel').hidden = o.status === 'Cancelled';
+    $('ordCancel').style.display = $('ordCancel').hidden ? 'none' : '';
     advanceButton.disabled = busy || !actionText || Boolean(o.archived);
     advanceButton.textContent = actionText || '';
     advanceButton.title = '';
@@ -398,7 +401,7 @@
     var date = dueDateISO($('ordDueDate').value);
     if (!p || !Number.isInteger(qty) || qty < 1 || qty > 1000 || !date ||
         !$('ordCustomer').value.trim() || !$('ordAddress').value.trim()) {
-      warn('Complete all required fields. Use a valid due date and a quantity from 1 to 1,000.'); return;
+      warn('Complete all required fields. Use a valid delivery date and a quantity from 1 to 1,000.'); return;
     }
     var short = p.materials.find(function (m) { return m.qty * qty > m.stock + 0.00001; });
     if (short) { warn('Not enough ' + short.name + ' in inventory.'); return; }

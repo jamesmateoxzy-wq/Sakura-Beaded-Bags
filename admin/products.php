@@ -45,7 +45,7 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="form-row sheet-top">
         <div class="field">
           <label for="sName">Product name</label>
-          <input class="input" type="text" id="sName">
+          <input class="input" type="text" id="sName" maxlength="160" required>
         </div>
         <div class="field">
           <label for="sCategory">Category</label>
@@ -77,7 +77,7 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="sheet-foot">
         <div class="field target">
           <label for="sTarget">Target price</label>
-          <input class="input" type="number" min="0" step="0.01" id="sTarget">
+          <input class="input" type="number" min="0.01" max="100000000" step="0.01" required id="sTarget">
         </div>
         <div class="actions">
           <button type="button" class="btn btn-outline" id="sReset">Reset</button>
@@ -139,7 +139,7 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="form-row">
         <div class="field">
           <label for="nName">Product name <span class="req">*</span></label>
-          <input class="input" type="text" id="nName" placeholder="e.g. Pearl Mini Tote">
+          <input class="input" type="text" id="nName" maxlength="160" required placeholder="e.g. Pearl Mini Tote">
         </div>
         <div class="field">
           <label for="nCategory">Category <span class="req">*</span></label>

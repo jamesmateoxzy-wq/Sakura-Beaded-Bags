@@ -107,10 +107,10 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
     </section>
 
-    <div class="pay-bottom-grid">
-        <section class="card pay-form-card" id="recordPaymentCard" aria-labelledby="recordHeading">
-            <div class="card-head"><h2 id="recordHeading">Record Payment</h2></div>
-            <form id="recordPaymentForm" novalidate>
+    <div class="modal-overlay" id="recordPaymentModal" role="dialog" aria-modal="true" aria-labelledby="recordHeading">
+        <section class="modal modal-lg pay-form-card" id="recordPaymentCard" aria-labelledby="recordHeading">
+            <div class="modal-head"><h2 id="recordHeading">Record Payment</h2><button type="button" class="icon-btn" data-close-modal="recordPaymentModal" aria-label="Close"><?= icon('x') ?></button></div>
+            <form id="recordPaymentForm" class="modal-body" novalidate>
                 <div class="pay-form-grid">
                     <div class="field pay-order-field">
                         <label for="paymentOrder">Order <span class="req">*</span></label>
@@ -141,15 +141,17 @@ require_once __DIR__ . '/../includes/header.php';
                 <p id="paymentFormError" class="pay-error" role="alert" hidden></p>
                 <div class="pay-form-actions">
                     <span id="balanceHint">Select an unpaid order to see its balance.</span>
-                    <button type="submit" class="btn btn-primary" id="savePaymentBtn">Save Demo Payment</button>
+                    <button type="submit" class="btn btn-primary" id="savePaymentBtn">Save Payment</button>
                 </div>
             </form>
         </section>
 
-        <section class="card pay-slip-card" id="slipCard" aria-labelledby="slipHeading">
+    </div>
+    <div class="modal-overlay" id="paymentSlipModal" role="dialog" aria-modal="true" aria-labelledby="slipHeading">
+        <section class="modal modal-lg pay-slip-card" id="slipCard" aria-labelledby="slipHeading">
             <div class="pay-slip-heading">
                 <h2 id="slipHeading">Payment Slip</h2>
-                <button type="button" id="printSlip" class="btn btn-outline btn-sm" disabled>View / Print Slip</button>
+                <button type="button" id="printSlip" class="btn btn-outline btn-sm" disabled>Print Slip</button><button type="button" class="icon-btn pay-slip-close" data-close-modal="paymentSlipModal" aria-label="Close"><?= icon('x') ?></button>
             </div>
             <div id="slipEmpty" class="pay-slip-empty">Select a transaction to view its payment slip.</div>
             <div id="slipDetails" hidden>
