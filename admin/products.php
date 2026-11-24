@@ -110,7 +110,7 @@ require_once __DIR__ . '/../includes/header.php';
           <p class="hint">Saved categories appear in the filter and product forms.</p>
           <p class="warn" id="acError" role="alert" hidden></p>
           <h3 class="section-title" style="margin-top:16px">Existing categories</h3>
-          <p class="hint">Only categories with no linked products can be removed.</p>
+          <p class="hint">Only categories with no active products can be removed. Removed products and order history are preserved.</p>
           <div id="acList" style="display:grid;gap:8px;margin-top:8px"></div>
         </div>
       </div>
