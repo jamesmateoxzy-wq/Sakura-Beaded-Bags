@@ -11,3 +11,9 @@ function sbb_activity(PDO $db,string $action): void { $db->prepare('INSERT INTO 
 function sbb_settings(PDO $db): array { return array_replace(['boutique_name'=>'Sakura Beaded Bags','contact'=>'','address'=>'','labor_rate'=>100,'packaging'=>50,'markup'=>100,'dp_policy'=>50],$db->query('SELECT setting_key,setting_value FROM sbb_settings')->fetchAll(PDO::FETCH_KEY_PAIR)); }
 function sbb_text($value,int $max,bool $required=false): string { if (!is_string($value)) throw new InvalidArgumentException('Invalid text.'); $value=trim($value); if (($required && $value==='') || strlen($value)>$max) throw new InvalidArgumentException('Check the required fields and text length.'); return $value; }
 function sbb_phone($value): string { $value=sbb_text($value,20); if ($value!=='' && !preg_match('/^[0-9+ -]{7,20}$/D',$value)) throw new InvalidArgumentException('Enter a valid contact number.'); return $value; }
+
+function sbb_optional_settings(PDO $db): array { try { return sbb_settings($db); } catch (Throwable $e) { error_log('SBB settings: '.$e->getMessage()); return []; } }
+function sbb_log_success(string $module, $action): void {
+ if (!is_string($action) || !preg_match('/^[a-z_]{1,50}$/D',$action) || empty($_SESSION['user_email']) || ($_SESSION['user_id']??'')==='demo') return;
+ try { sbb_activity(sbb_db(),$module.': '.str_replace('_',' ',$action)); } catch(Throwable $e) { error_log('SBB audit: '.$e->getMessage()); }
+}
