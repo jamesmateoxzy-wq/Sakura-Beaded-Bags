@@ -35,7 +35,7 @@ try { $business=sbb_optional_settings(sbb_db()); } catch (Throwable $e) { $busin
         </select>
       </label>
     </div>
-    <div class="rep-actions"><a class="btn btn-outline" href="expenses.php">Manage Expenses</a>
+    <div class="rep-actions">
       <button type="button" class="btn rep-export-csv" id="repExport"><?= icon('download') ?><span>Export CSV</span></button>
       <button type="button" class="btn btn-primary rep-export-pdf" id="repPrint"><?= icon('document') ?><span>Export PDF</span></button>
     </div>
