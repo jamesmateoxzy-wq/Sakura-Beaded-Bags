@@ -7,6 +7,9 @@
  * The pricing/payment defaults are meant to pre-fill new products and orders.
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/final_features.php';
+sbb_admin_guard();
+$notice=''; $error='';
 
 // TODO (backend): load these from the database
 $settings = [
@@ -19,6 +22,34 @@ $settings = [
     'dp_policy'     => 50,    // required downpayment %
 ];
 
+try {
+    $db=sbb_db();
+    $settings=sbb_settings($db);
+    if ($_SERVER['REQUEST_METHOD']==='POST') {
+        sbb_check_token();
+        $form=$_POST['form']??'';
+        if ($form==='boutique') {
+            $values=['boutique_name'=>sbb_text($_POST['boutique_name']??null,80,true),'contact'=>sbb_phone($_POST['contact']??''),'address'=>sbb_text($_POST['address']??'',150)];
+        } elseif ($form==='defaults') {
+            $values=[];
+            foreach (['labor_rate'=>1000000,'packaging'=>1000000,'markup'=>999.99,'dp_policy'=>100] as $key=>$max) {
+                $v=$_POST[$key]??null;
+                if (!is_numeric($v) || !is_finite((float)$v) || (float)$v<0 || (float)$v>$max || ($key==='dp_policy' && floor((float)$v)!=(float)$v)) throw new InvalidArgumentException('Enter valid pricing and payment defaults.');
+                $values[$key]=number_format((float)$v,2,'.','');
+            }
+        } else throw new InvalidArgumentException('Unknown settings form.');
+        $db->beginTransaction();
+        $stmt=$db->prepare('INSERT INTO sbb_settings (setting_key,setting_value) VALUES (?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)');
+        foreach ($values as $key=>$value) $stmt->execute([$key,$value]);
+        sbb_activity($db,'Updated '.$form.' settings');
+        $db->commit(); header('Location: settings.php?saved=1'); exit;
+    }
+    if (isset($_GET['saved'])) $notice='Settings saved.';
+} catch (Throwable $e) {
+    if (isset($db) && $db->inTransaction()) $db->rollBack();
+    error_log('SBB settings: '.$e->getMessage());
+    $error=$e instanceof InvalidArgumentException ? $e->getMessage() : 'Settings could not be loaded or saved. Check the migration and server logs.';
+}
 $pageTitle    = 'Account Settings';
 $pageSubtitle = 'Manage your boutique details and connected account.';
 $activePage   = '';
@@ -29,6 +60,8 @@ require_once __DIR__ . '/../includes/header.php';
 $userEmail = $_SESSION['user_email'] ?? '';
 ?>
 
+<?php if ($notice): ?><p role="status" class="note"><?= e($notice) ?></p><?php endif; ?>
+<?php if ($error): ?><p role="alert" class="note"><?= e($error) ?></p><?php endif; ?>
 <div class="settings-stack">
 
   <!-- ===== Boutique details ===== -->
@@ -36,10 +69,10 @@ $userEmail = $_SESSION['user_email'] ?? '';
     <div class="card-head">
       <div>
         <h2>Boutique details</h2>
-        <p class="card-sub">Shown on payment slips and reports.</p>
+        <p class="card-sub">Saved boutique contact information.</p>
       </div>
     </div>
-    <form method="post" action="settings.php" data-demo>
+    <form method="post" action="settings.php"><input type="hidden" name="csrf" value="<?= e(sbb_form_token()) ?>">
       <input type="hidden" name="form" value="boutique">
       <div class="field">
         <label for="boutiqueName">Boutique name <span class="req">*</span></label>
@@ -68,10 +101,10 @@ $userEmail = $_SESSION['user_email'] ?? '';
     <div class="card-head">
       <div>
         <h2>Pricing &amp; payment defaults</h2>
-        <p class="card-sub">These values pre-fill new products and orders. You can still change them each time.</p>
+        <p class="card-sub">Saved defaults for future product costing and order settings.</p>
       </div>
     </div>
-    <form method="post" action="settings.php" data-demo>
+    <form method="post" action="settings.php"><input type="hidden" name="csrf" value="<?= e(sbb_form_token()) ?>">
       <input type="hidden" name="form" value="defaults">
       <div class="form-row">
         <div class="field">
