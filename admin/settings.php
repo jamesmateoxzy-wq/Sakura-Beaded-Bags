@@ -69,7 +69,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
     <div class="card-head">
       <div>
         <h2>Boutique details</h2>
-        <p class="card-sub">Saved boutique contact information.</p>
+        <p class="card-sub">Shown on payment slips and reports.</p>
       </div>
     </div>
     <form method="post" action="settings.php"><input type="hidden" name="csrf" value="<?= e(sbb_form_token()) ?>">
@@ -101,7 +101,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
     <div class="card-head">
       <div>
         <h2>Pricing &amp; payment defaults</h2>
-        <p class="card-sub">Saved defaults for future product costing and order settings.</p>
+        <p class="card-sub">Packaging and markup pre-fill new products; the labor rate is a costing reference. Downpayment applies to newly created products only.</p>
       </div>
     </div>
     <form method="post" action="settings.php"><input type="hidden" name="csrf" value="<?= e(sbb_form_token()) ?>">
