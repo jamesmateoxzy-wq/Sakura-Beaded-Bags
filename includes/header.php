@@ -36,7 +36,6 @@ $nav = [
     'products'  => ['Product Costing & Pricing', 'products.php',  'costing'],
     'inventory' => ['Inventory Management',      'inventory.php', 'inventory'],
     'payments'  => ['Payments & Sales',          'payments.php',  'payments'],
-    'expenses'  => ['Operating Expenses', 'expenses.php', 'payments'],
     'reports'   => ['Financial Reports',         'reports.php',   'reports'],
 ];
 ?>
