@@ -9,10 +9,10 @@
  * DEMO_MODE         : true shows a "Preview without Google" link on the login page.
  *                     Use only for the local prototype.
  */
-const GOOGLE_CLIENT_ID = 'PASTE-ID';
+const GOOGLE_CLIENT_ID = '571875657015-fa3v0aebni20gk051nc0smn48l4rvpri.apps.googleusercontent.com';
 
 const ALLOWED_ADMIN_EMAILS = [
-    'owner',
+    'elleragos@gmail.com',
     // 'groupmate@gmail.com',
 ];
 

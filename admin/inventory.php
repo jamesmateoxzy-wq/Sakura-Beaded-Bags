@@ -41,13 +41,13 @@ require_once __DIR__ . '/../includes/header.php';
         <input type="search" id="invSearch" placeholder="Search material ID or name">
       </label>
       <div class="inv-toolbar-actions">
-        <button type="button" class="btn inv-correction-button" id="invOpenCreate" <?= $isDemo ? '' : 'disabled' ?>>
+        <button type="button" class="btn inv-correction-button" id="invOpenCreate" disabled>>
           <?= icon('plus') ?><span>Add<br>Material</span>
         </button>
-        <button type="button" class="btn inv-correction-button" id="invOpenCorrection" <?= $isDemo ? '' : 'disabled' ?>>
+        <button type="button" class="btn inv-correction-button" id="invOpenCorrection" disabled>>
           <?= icon('sliders') ?><span>Stock<br>Correction</span>
         </button>
-        <button type="button" class="btn btn-primary inv-stockin-button" id="invOpenStockIn">
+       <button type="button" class="btn btn-primary inv-stockin-button" id="invOpenStockIn" disabled>>
           <?= icon('plus') ?><span>Stock-In</span>
         </button>
       </div>

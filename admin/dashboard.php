@@ -71,7 +71,7 @@ require_once __DIR__ . '/../includes/header.php';
 
 <div class="dash-head">
   <h2 class="section-title">Your boutique at a glance</h2>
-  <form id="monthForm" class="month-picker">
+  <form method="get" id="monthForm" class="month-picker">
     <?= icon('calendar') ?>
     <input type="month" id="monthInput" name="month" value="<?= e($month) ?>" aria-label="Choose month">
   </form>
@@ -79,14 +79,11 @@ require_once __DIR__ . '/../includes/header.php';
 
 <!-- ===== Stat cards ===== -->
 <section class="stats">
-  <?php foreach ([
-    ['sales', 'Booked Sales', 'wallet'], ['orders', 'Total Orders', 'orders'],
-    ['pending', 'Pending Orders', 'clock'], ['low', 'Low Stock Items', 'box']
-  ] as [$id, $label, $icon]): ?>
+  <?php foreach ($stats as $s): ?>
     <article class="card stat">
-      <div class="stat-top"><span><?= e($label) ?></span><?= icon($icon) ?></div>
-      <strong id="dash-<?= e($id) ?>">0</strong>
-      <small id="dash-note-<?= e($id) ?>"></small>
+      <div class="stat-top"><span><?= e($s['label']) ?></span><?= icon($s['icon']) ?></div>
+      <strong><?= e($s['value']) ?></strong>
+      <small><?= e($s['note']) ?></small>
     </article>
   <?php endforeach; ?>
 </section>
@@ -99,35 +96,74 @@ require_once __DIR__ . '/../includes/header.php';
       <h2>Recent Orders</h2>
       <a class="btn btn-outline btn-sm" href="orders.php"><?= icon('arrow') ?> View all</a>
     </div>
-    <div class="table-wrap">
-      <table class="table">
-        <thead><tr><th>Order ID</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead>
-        <tbody id="dashRecent"></tbody>
-      </table>
-    </div>
-    <p class="empty-state" id="dashNoOrders" hidden>No orders in the selected month.</p>
+    <?php if ($recentOrders): ?>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Order ID</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead>
+          <tbody>
+          <?php foreach ($recentOrders as $o): ?>
+            <tr>
+              <td class="strong"><?= e($o['id']) ?></td>
+              <td><?= e($o['customer']) ?></td>
+              <td><?= peso($o['total']) ?></td>
+              <td><span class="badge <?= badge_class($o['status']) ?>"><?= e($o['status']) ?></span></td>
+            </tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    <?php else: ?>
+      <p class="empty-state">No orders yet. New orders will show up here.</p>
+    <?php endif; ?>
+    <p class="note"><?= icon('info') ?> Latest orders · Updated <?= e($updatedOn) ?></p>
   </section>
 
   <!-- ===== Inventory alerts ===== -->
   <section class="card area-alerts">
     <div class="card-head">
       <h2>Inventory Alerts</h2>
-      <span class="badge badge-pink" id="dashAlertCount"></span>
+      <span class="badge badge-pink"><?= (int)$lowStockTotal ?> items</span>
     </div>
-    <ul class="alert-list" id="dashAlertList"></ul>
-    <p class="empty-state" id="dashNoAlerts" hidden>No materials below their reorder threshold.</p>
-    <a class="link-pink" href="inventory.php">View Inventory →</a>
+    <?php if ($lowStock): ?>
+      <ul class="alert-list">
+        <?php foreach ($lowStock as $m): ?>
+          <li>
+            <div><strong><?= e($m['name']) ?></strong><small><?= e($m['left']) ?> remaining</small></div>
+            <span class="low-tag">Low Stock</span>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+      <a class="link-pink" href="inventory.php">View all <?= (int)$lowStockTotal ?> alerts →</a>
+    <?php else: ?>
+      <p class="empty-state">All materials are well stocked.</p>
+    <?php endif; ?>
   </section>
 
+  <!-- ===== Sales overview (bars are drawn from $monthlySales) ===== -->
   <section class="card area-chart">
     <div class="card-head">
-      <div><h2>Sales Overview</h2><p class="card-sub">Booked sales for the six months ending in the selected month</p></div>
-      <strong class="chart-total" id="dashChartTotal"></strong>
+      <div>
+        <h2>Sales Overview</h2>
+        <p class="card-sub">Monthly sales · <?= e($rangeText) ?></p>
+      </div>
+      <strong class="chart-total"><?= peso(end($monthlySales)) ?> this month</strong>
     </div>
     <div class="chart">
-      <div class="chart-axis" id="dashChartAxis"></div>
-      <div class="chart-bars" id="dashChartBars"></div>
+      <div class="chart-axis"><span><?= $k($chartMax) ?></span><span><?= $k($chartMax / 2) ?></span><span>₱0</span></div>
+      <div class="chart-bars">
+        <?php $last = array_key_last($monthlySales); foreach ($monthlySales as $label => $value): ?>
+          <div class="bar-col">
+            <div class="bar <?= $label === $last ? 'is-current' : '' ?>"
+                 style="--h: <?= round($value / $chartMax * 100, 1) ?>%"
+                 title="<?= e($label) ?>: <?= peso($value) ?>"></div>
+            <span><?= e($label) ?></span>
+          </div>
+        <?php endforeach; ?>
+      </div>
     </div>
+    <?php if (array_sum($monthlySales) === 0): ?>
+      <p class="note"><?= icon('info') ?> No sales recorded for this period yet.</p>
+    <?php endif; ?>
   </section>
 
   <!-- ===== Quick actions =====
