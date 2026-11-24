@@ -281,8 +281,8 @@ function ord_cancel(PDO $pdo, array $data): array {
         return ['ok' => true, 'message' => 'Order is already marked Cancelled in Production.'];
     }
     if ($order['archived_at'] !== null) throw new InvalidArgumentException('Archived orders cannot be cancelled.');
-    if (in_array($order['delivery_status'], ['Delivered', 'Returned'], true)) {
-        throw new InvalidArgumentException('Delivered or returned orders cannot be cancelled.');
+    if (in_array($order['delivery_status'], ['In Transit', 'Delivered', 'Returned'], true)) {
+        throw new InvalidArgumentException('Shipped, delivered or returned orders cannot be cancelled.');
     }
     if (!in_array($status, ['Pending', 'In Production', 'Ready', 'Completed'], true)) {
         throw new InvalidArgumentException('This order cannot be cancelled.');
@@ -352,13 +352,22 @@ function ord_advance(PDO $pdo, array $data): array {
 
     $type = 'Production';
     $oldStatus = $production;
-    if ($production === 'Pending') {
+    if (($data['transition'] ?? '') === 'ship') {
+        if ($production !== 'Completed' || !in_array($delivery, ['Not Scheduled', 'For Delivery'], true)) {
+            throw new InvalidArgumentException('Only completed, unshipped orders can be marked as shipped.');
+        }
+        $newStatus = 'In Transit';
+        $oldStatus = $delivery;
+        $column = 'delivery_status';
+        $type = 'Delivery';
+    } elseif ($production === 'Pending') {
         $newStatus = 'In Production';
         $column = 'production_status';
     } elseif ($production === 'In Production' || $production === 'Ready') {
         $newStatus = 'Completed';
         $column = 'production_status';
     } elseif ($production === 'Completed') {
+        if ($delivery !== 'In Transit') throw new InvalidArgumentException('Mark this order as shipped before marking it delivered.');
         // Payments API takes the same order-row lock before recording money.
         // These totals therefore cannot change concurrently with this check.
         $totals = $pdo->prepare('SELECT COALESCE(SUM(quantity * unit_price), 0)
