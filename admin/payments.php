@@ -124,7 +124,6 @@ require_once __DIR__ . '/../includes/header.php';
                         <label for="paymentMethod">Method <span class="req">*</span></label>
                         <select class="select" id="paymentMethod" name="method" required>
                             <option value="GCash">GCash</option>
-                            <option value="Cash">Cash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
                         </select>
                     </div>
@@ -137,7 +136,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <input class="input" id="paymentReference" name="reference" type="text" maxlength="80" placeholder="GCash / bank reference" autocomplete="off">
                     </div>
                 </div>
-                <p class="pay-help">Required for GCash and bank transfers. For cash, a receipt reference is created automatically.</p>
+                <p class="pay-help">A transaction reference is required for GCash and bank transfers.</p>
                 <p id="paymentFormError" class="pay-error" role="alert" hidden></p>
                 <div class="pay-form-actions">
                     <span id="balanceHint">Select an unpaid order to see its balance.</span>
