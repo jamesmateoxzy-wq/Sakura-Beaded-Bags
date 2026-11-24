@@ -36,7 +36,10 @@ $validPublicOrigin = preg_match('~^https://(?:[a-z0-9-]+\\.)+[a-z0-9-]+(?::[0-9]
 $origin = $isLoopback ? 'http://' . $host : ($validPublicOrigin ? $publicOrigin : '');
 $loginUri = $origin . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') . '/google-callback.php';
 $canGoogleLogin = !$notSetUp && $origin !== '';
-if (!$isLoopback && $validPublicOrigin && strtolower((string)parse_url($publicOrigin, PHP_URL_HOST)) !== explode(':',$host)[0]) {
+$expectedHost = strtolower((string)parse_url($publicOrigin, PHP_URL_HOST));
+$expectedPort = parse_url($publicOrigin, PHP_URL_PORT);
+if ($expectedPort !== null && $expectedPort !== 443) $expectedHost .= ':' . $expectedPort;
+if (!$isLoopback && $validPublicOrigin && $expectedHost !== $host && !($expectedPort === 443 && $expectedHost . ':443' === $host)) {
     $canGoogleLogin = false;
 }
 ?>
