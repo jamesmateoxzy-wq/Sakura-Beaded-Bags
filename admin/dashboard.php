@@ -77,6 +77,10 @@ require_once __DIR__ . '/../includes/header.php';
   </form>
 </div>
 
+<?php if (!empty($dashboardError)): ?>
+<section class="card" role="alert"><h2>Data unavailable</h2><p><?= e($dashboardError) ?></p><p class="hint">The dashboard figures are hidden because they cannot be verified.</p><a class="btn btn-outline" href="dashboard.php">Retry</a></section>
+<?php else: ?>
+<?php if (!empty($overdueTotal)): ?><section class="card final-overdue" role="status"><strong><?= (int)$overdueTotal ?> overdue deliver<?= $overdueTotal===1?'y':'ies' ?></strong> · <a class="link-pink" href="orders.php?filter=overdue">Review overdue orders →</a></section><?php endif; ?>
 <!-- ===== Stat cards ===== -->
 <section class="stats">
   <?php foreach ($stats as $s): ?>
@@ -181,4 +185,4 @@ require_once __DIR__ . '/../includes/header.php';
 
 </div>
 
-<?php require_once __DIR__ . '/../includes/footer.php'; ?>
+<?php endif; require_once __DIR__ . '/../includes/footer.php'; ?>
