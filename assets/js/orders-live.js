@@ -50,10 +50,11 @@
     var date = new Date(v + 'T12:00:00');
     return isNaN(date.getTime()) ? String(v) : date.toLocaleDateString('en-PH', {year:'numeric', month:'short', day:'numeric'});
   }
+  function deliveryLabel(s) { return s === 'In Transit' ? 'Shipped' : s; }
   function badgeClass(s) {
     return ['Completed','Delivered','Paid'].includes(s) ? 'badge-green' :
       ['Pending','Not Scheduled','Unpaid'].includes(s) ? 'badge-amber' :
-      ['In Production','Ready','For Delivery','In Transit','Partial'].includes(s) ? 'badge-blue' : 'badge-pink';
+      ['In Production','Ready','For Delivery','In Transit','Shipped','Partial'].includes(s) ? 'badge-blue' : 'badge-pink';
   }
   function badge(s) { return '<span class="badge ' + badgeClass(s) + '">' + esc(s) + '</span>'; }
   function product() {
@@ -156,7 +157,7 @@
       var inGroup = (activeGroup === 'all' && !archived(o)) ||
         (activeGroup === 'production' && currentProduction(o)) ||
         (activeGroup === 'archived' && archived(o));
-      return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered')) &&
+      return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered') || (filter === 'In Transit' && o.delivery === 'In Transit')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
     }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
     $('ordTotal').textContent = orders.filter(function (o) {
@@ -170,7 +171,7 @@
     $('ordRows').innerHTML = shown.map(function (o) {
       return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
-        '</td><td>' + badge(o.status) + '</td><td>' + badge(o.delivery) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
+        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
@@ -211,8 +212,13 @@
     $('ordDetailPayment').className = 'badge ' + badgeClass(o.payment);
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
+    $('ordDetailDelivery').textContent = deliveryLabel(o.delivery);
+    $('ordDetailDelivery').className = 'badge ' + badgeClass(o.delivery);
+    $('ordShip').hidden = Boolean(o.archived) || o.status === 'Cancelled' || !['Not Scheduled','For Delivery'].includes(o.delivery);
+    $('ordShip').disabled = busy || !canShip(o);
+    $('ordShip').title = canShip(o) ? '' : 'Complete production before shipping';
     $('ordCancel').disabled = Boolean(o.archived) || o.status === 'Cancelled' ||
-      o.delivery === 'Delivered' || o.delivery === 'Returned' || Number(o.paid) > 0;
+      o.delivery === 'In Transit' || o.delivery === 'Delivered' || o.delivery === 'Returned' || Number(o.paid) > 0;
     $('ordArchive').disabled = Boolean(o.archived);
     var actionText = statusAction(o);
     advanceButton.hidden = !actionText || Boolean(o.archived);
@@ -230,34 +236,36 @@
     if (!o || o.archived || o.status === 'Cancelled' || o.delivery === 'Delivered' || o.delivery === 'Returned') return '';
     if (o.status === 'Pending') return 'Start Production';
     if (o.status === 'In Production' || o.status === 'Ready') return 'Mark Completed';
-    if (o.status === 'Completed') return 'Mark Delivered';
+    if (o.status === 'Completed' && o.delivery === 'In Transit') return 'Mark Delivered';
     return '';
   }
+  function canShip(o) { return o && !o.archived && o.status === 'Completed' && ['Not Scheduled','For Delivery'].includes(o.delivery); }
   var advanceButton = document.createElement('button');
   advanceButton.type = 'button';
   advanceButton.id = 'ordAdvance';
   advanceButton.className = 'btn btn-primary';
   advanceButton.hidden = true;
   var cancelButton = $('ordCancel');
-  cancelButton.parentNode.insertBefore(advanceButton, cancelButton);
+  cancelButton.parentNode.insertBefore(advanceButton, $('ordShip'));
   function openOrderActionConfirmation(action) {
     if (busy || !detailOrder) return;
     var before = detailOrder;
-    var isDelivery = action === 'Mark Delivered';
+    var isShip = action === 'Shipped';
+    var isDelivery = action === 'Mark Delivered' || isShip;
     var isCancel = action === 'Cancel Order';
     var isArchive = action === 'Archive';
     var isStatusUpdate = !isCancel && !isArchive;
-    if (isStatusUpdate && statusAction(before) !== action) return;
+    if (isShip ? !canShip(before) : isStatusUpdate && statusAction(before) !== action) return;
 
     pendingOrderAction = action;
     $('ordStatusConfirmTitle').textContent = action + '?';
     $('ordStatusConfirmOrder').textContent = before.id;
     $('ordStatusFromLabel').textContent = isDelivery ? 'Current delivery status' : 'Current production status';
-    $('ordStatusFrom').textContent = isDelivery ? before.delivery : before.status;
+    $('ordStatusFrom').textContent = isDelivery ? deliveryLabel(before.delivery) : before.status;
     $('ordStatusToLabel').textContent = isArchive ? 'Order record' :
       (isDelivery ? 'New delivery status' : 'New production status');
     $('ordStatusTo').textContent = isArchive ? 'Archived' :
-      (isCancel ? 'Cancelled' : isDelivery ? 'Delivered' :
+      (isCancel ? 'Cancelled' : isShip ? 'Shipped' : isDelivery ? 'Delivered' :
         (action === 'Start Production' ? 'In Production' : 'Completed'));
     if (isCancel) {
       $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will remain in Production with the status Cancelled until archived.';
@@ -266,7 +274,7 @@
     } else {
       $('ordStatusConfirmMessage').textContent = 'Confirm this status update for ' + before.id + '?';
     }
-    var note = isDelivery && Number(before.balance) > 0
+    var note = isShip ? 'Production is complete. Shipping does not change inventory or payments.' : isDelivery && Number(before.balance) > 0
       ? 'Outstanding balance: ' + money(before.balance) + '. Record full payment before marking this order delivered.'
       : isDelivery ? 'Full payment is recorded. You can mark this order delivered.'
       : isCancel && before.status === 'Pending' ? 'Reserved materials will be returned to inventory. Paid orders cannot be cancelled.'
@@ -278,6 +286,7 @@
     openModal('ordStatusConfirmModal');
     $('ordStatusConfirmCancel').focus();
   }
+  $('ordShip').addEventListener('click', function () { if (canShip(detailOrder)) openOrderActionConfirmation('Shipped'); });
   advanceButton.addEventListener('click', function () {
     if (!detailOrder) return;
     openOrderActionConfirmation(statusAction(detailOrder));
@@ -288,7 +297,7 @@
     var action = pendingOrderAction;
     if (action === 'Cancel Order' &&
         (before.archived || !['Pending','In Production','Ready','Completed'].includes(before.status) ||
-         before.delivery === 'Delivered' || before.delivery === 'Returned' || Number(before.paid) > 0)) {
+         before.delivery === 'In Transit' || before.delivery === 'Delivered' || before.delivery === 'Returned' || Number(before.paid) > 0)) {
       notify('Only unpaid, undelivered orders can be cancelled.');
       return;
     }
@@ -296,6 +305,7 @@
       notify('This order is already archived.');
       return;
     }
+    if (action === 'Shipped' && !canShip(before)) { notify('Complete production before shipping.'); return; }
     if (['Start Production','Mark Completed','Mark Delivered'].indexOf(action) !== -1 &&
         statusAction(before) !== action) {
       notify('The order status changed. Refresh and retry.');
@@ -309,6 +319,7 @@
       payload.action = 'advance_order';
       payload.expectedProduction = before.status;
       payload.expectedDelivery = before.delivery;
+      if (action === 'Shipped') payload.transition = 'ship';
     }
     busy = true;
     advanceButton.disabled = true;
@@ -465,7 +476,7 @@
   $('ordCancel').addEventListener('click', async function () {
     if (!detailOrder || busy || detailOrder.archived ||
         !['Pending','In Production','Ready','Completed'].includes(detailOrder.status) ||
-        detailOrder.delivery === 'Delivered' || detailOrder.delivery === 'Returned' ||
+        detailOrder.delivery === 'In Transit' || detailOrder.delivery === 'Delivered' || detailOrder.delivery === 'Returned' ||
         Number(detailOrder.paid) > 0) return;
     openOrderActionConfirmation('Cancel Order');
   });
