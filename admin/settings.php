@@ -1,17 +1,11 @@
 <?php
-/**
- * ACCOUNT SETTINGS  (frontend)
- * ------------------------------------------------------------
- * Backend teammate: load $settings from a `settings` table and save the two
- * forms below, then remove the data-demo attribute from each <form>.
- * The pricing/payment defaults are meant to pre-fill new products and orders.
- */
+/** Persistent boutique settings and new-product defaults. */
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/final_features.php';
 sbb_admin_guard();
 $notice=''; $error='';
 
-// TODO (backend): load these from the database
+// Fallback values if settings are unavailable.
 $settings = [
     'boutique_name' => 'Sakura Beaded Bags',
     'contact'       => '',
