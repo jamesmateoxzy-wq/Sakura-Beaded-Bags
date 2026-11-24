@@ -500,5 +500,6 @@
     URL.revokeObjectURL(url);
   });
 
+  if(new URLSearchParams(window.location.search).get('filter')==='overdue') $('ordFilter').value='overdue';
   loadData().catch(function (e) { errorNotice('Orders could not load: ' + e.message); });
 })();
