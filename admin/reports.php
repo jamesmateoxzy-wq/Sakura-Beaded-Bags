@@ -81,6 +81,7 @@ try { $business=sbb_optional_settings(sbb_db()); } catch (Throwable $e) { $busin
       <p class="rep-empty" id="repComparisonEmpty" hidden>No revenue or expenses recorded.</p>
     </section>
   </div>
+  <p id="repPrepared" class="note" role="status">Loading financial data from MySQL…</p>
   <div class="rep-analysis-grid">
     <section class="card rep-analysis-card">
       <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle">No financial activity recorded.</p></div>
@@ -95,9 +96,6 @@ try { $business=sbb_optional_settings(sbb_db()); } catch (Throwable $e) { $busin
       <h2 id="repGlanceTitle">No activity yet</h2>
       <div class="rep-margin-row"><span>Estimated profit margin</span><strong id="repMargin">0.0%</strong></div>
       <div class="rep-margin-track"><span id="repMarginBar"></span></div>
-      <p id="repGlanceText">No sales or expenses recorded for this period.</p>
-      <small id="repCalculation">Revenue: ₱0 - Expenses: ₱0</small>
-      <small id="repPrepared">No report data yet · Currency: PHP (₱)</small>
     </section>
   </div>
 </section>
