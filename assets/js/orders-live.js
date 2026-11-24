@@ -166,10 +166,11 @@
     var isArchiveView = activeGroup === 'archived';
     document.querySelector('.orders-current').hidden = isArchiveView;
     $('ordNew').hidden = isArchiveView;
+    $('ordArchiveActions').hidden = !isArchiveView;
     $('ordRows').innerHTML = shown.map(function (o) {
       return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
-        '</td><td>' + badge(o.status) + '</td><td>' + badge(o.delivery) + '</td><td>' + badge(o.payment) + '</td></tr>';
+        '</td><td>' + badge(o.status) + '</td><td>' + badge(o.delivery) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
@@ -428,7 +429,20 @@
     var target = e.target.closest('[data-view]');
     if (target) showDetails(target.dataset.view);
   }
-  $('ordRows').addEventListener('click', clickOrder);
+  $('ordRows').addEventListener('click', async function(e) {
+    var button = e.target.closest('[data-unarchive]');
+    if (!button) { clickOrder(e); return; }
+    if (busy || !ready) return;
+    var order = orders.find(function(o) { return o.id === button.dataset.unarchive && archived(o); });
+    if (!order || !window.confirm('Remove ' + order.id + ' from archive? Its existing status and history will be preserved.')) return;
+    busy = true; button.disabled = true;
+    try {
+      var response = await submitAction({action:'unarchive_order', orderId:order.rawId});
+      notify(response.message);
+      await loadData();
+    } catch(error) { notify(error.message || 'Could not remove order from archive.'); }
+    finally { busy = false; renderOrders(); }
+  });
   $('ordCards').addEventListener('click', clickOrder);
   $('ordCards').addEventListener('keydown', function (e) {
     var card = e.target.closest('[data-view]');
