@@ -7,7 +7,7 @@
   const S = window.Sakura;
   const $ = id => document.getElementById(id);
   const endpoint = 'api/products.php';
-  let materials = [], products = [], categories = [], csrf = '', selectedId = null;
+  let defaults = {}; let materials = [], products = [], categories = [], csrf = '', selectedId = null;
   let draft = null, newDraft = null, onAddMaterial = null, pending = false;
   let lastCreatedCategoryId = null;
   let newPhoto = null, photoPreviewUrl = null;
@@ -22,7 +22,7 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['nSave','sSave','sRemoveProduct','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['sPhotoSave','sPhoto','nSave','sSave','sRemoveProduct','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
   async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
@@ -131,7 +131,7 @@
   }
   function selectProduct(id) {
     const product=products.find(p=>p.id===id); if(!product)return;
-    selectedId=id; draft=copy(product);
+    selectedId=id; draft=copy(product); $('sPhoto').value='';
     $('costSheet').hidden=false; $('emptyState').hidden=true;
     $('sTitle').textContent=draft.name+' · Costing sheet';
     $('sSku').textContent='SKU: '+(draft.sku||'—')+' · '+draft.category;
@@ -205,7 +205,7 @@
   function payload(p,action) { return {action,id:p.id||undefined,name:p.name.trim(),categoryId:Number(p.categoryId),labor:Number(p.labor),packaging:Number(p.packaging),markup:Number(p.markup),materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
   function recipePayload(p) { return {action:'save_recipe',id:p.id,materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
   async function reloadAndSelect(id) {
-    const data=await request(); materials=data.materials||[]; products=data.products||[]; categories=data.categories||[]; csrf=data.csrf||'';
+    const data=await request(); materials=data.materials||[]; products=data.products||[]; categories=data.categories||[]; defaults=data.defaults||{}; csrf=data.csrf||'';
     populateCategories();
     if(id && products.some(p=>p.id===id)) selectProduct(id);
     else if(products.length) selectProduct(products[0].id);
@@ -217,6 +217,14 @@
     ).join('') : '<p class="hint">No categories yet.</p>';
   }
   function setup() {
+    $('sPhotoSave').addEventListener('click',async()=>{
+      if(pending||!draft)return;
+      const file=$('sPhoto').files[0];
+      if(!file||!PHOTO_TYPES.includes(file.type)||file.size<1||file.size>MAX_PHOTO_BYTES){toast('Choose a JPG, PNG or WebP photo up to 4 MB.');return;}
+      const id=draft.id;setBusy(true);
+      try{await request({action:'replace_photo',id},file);await reloadAndSelect(id);toast('Photo updated.');}
+      catch(e){toast(e.message);}finally{setBusy(false);}
+    });
     $('acList').addEventListener('click', async event => {
       const button=event.target.closest('[data-remove-category]');
       if(!button || pending)return;
@@ -317,9 +325,9 @@
     $('openAddProduct').addEventListener('click',()=>{
       if(!materials.length){toast('Add materials in Inventory first.');return;}
       const defaultCategoryId = categories.some(c=>c.id===lastCreatedCategoryId) ? lastCreatedCategoryId : (categories[0]?.id||0);
-      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,markup:100};
+      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:Number(defaults.packaging??0),markup:Number(defaults.markup??100)};
       $('nName').value='';$('nCategory').value=newDraft.categoryId;$('nSku').value='Assigned when saved';
-      $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;
+      $('nLabor').value=0;$('nPackaging').value=newDraft.packaging;$('nMarkup').value=newDraft.markup;$('nLaborHint').textContent='Labor rate: '+pesos(defaults.labor_rate??100)+' per hour. Enter total labor cost.';
       $('nPhoto').disabled=false;clearProductPhoto();
       renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);
       S.openModal('addProductModal');
