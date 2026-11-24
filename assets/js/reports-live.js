@@ -185,7 +185,7 @@
     if (!loaded) return;
     const data = summary();
     const rows = [
-      ['SAKURA BEADED BAGS - PAYMENT-BASED FINANCIAL REPORT'],
+      [String(root.dataset.business || 'Sakura Beaded Bags') + ' - PAYMENT-BASED FINANCIAL REPORT'],
       ['Period', data.month === 'all' ? 'All dates' : data.month],
       ['Metric', 'Amount PHP'],
       ['Total sales (successful payments)', (data.sales / 100).toFixed(2)],
