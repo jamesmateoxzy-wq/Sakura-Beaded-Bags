@@ -3,7 +3,7 @@
  * Sakura Beaded Bags — Products/Costing JSON API.
  * Requires the original schema plus scripts/migrate_product_catalog.php --apply.
  * GET returns live materials/categories/products and a session CSRF token.
- * POST creates/updates products and optionally creates a category.
+ * POST creates/updates products, recipes and categories.
  * Product recipes never deduct inventory: that belongs to order processing.
  */
 declare(strict_types=1);
@@ -197,6 +197,52 @@ try {
         $stmt = $pdo->prepare('INSERT INTO product_categories (category_name) VALUES (?)');
         $stmt->execute([$name]);
         prod_out(['ok' => true, 'id' => (int) $pdo->lastInsertId(), 'message' => 'Category saved in MySQL.'], 201);
+    }
+
+    if ($action === 'save_recipe') {
+        $productId = prod_positive_id($body['id'] ?? null, 'product');
+        $materialItems = $body['materials'] ?? null;
+        if (!is_array($materialItems) || !array_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
+            throw new InvalidArgumentException('Choose 1 to 100 recipe materials.');
+        }
+        $recipe = [];
+        foreach ($materialItems as $item) {
+            if (!is_array($item)) throw new InvalidArgumentException('Invalid recipe entry.');
+            $materialId = prod_material_id($item['id'] ?? null);
+            if (isset($recipe[$materialId])) throw new InvalidArgumentException('This recipe contains the same material twice.');
+            $recipe[$materialId] = prod_number($item['qty'] ?? null, 'Recipe quantity', 1000000, false);
+        }
+
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT labor_cost, packaging_cost, other_cost, markup_percent
+            FROM products WHERE product_id = ? AND is_active = 1 FOR UPDATE');
+        $stmt->execute([$productId]);
+        $product = $stmt->fetch();
+        if (!is_array($product)) throw new InvalidArgumentException('Product not found. Refresh and retry.');
+
+        $matStmt = $pdo->prepare('SELECT unit_cost FROM materials WHERE material_id = ? FOR UPDATE');
+        $materialTotal = 0.0;
+        foreach ($recipe as $materialId => $quantity) {
+            $matStmt->execute([$materialId]);
+            $cost = $matStmt->fetchColumn();
+            if ($cost === false) throw new InvalidArgumentException('A material no longer exists. Refresh and retry.');
+            $materialTotal += round((float) $quantity * (float) $cost, 2);
+        }
+        $total = $materialTotal + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'];
+        $price = round($total * (1 + (float) $product['markup_percent'] / 100), 2);
+        if ($total <= 0 || !is_finite($price) || $price > 100000000) {
+            throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
+        }
+
+        $pdo->prepare('UPDATE products SET selling_price = ? WHERE product_id = ?')
+            ->execute([prod_money($price), $productId]);
+        $pdo->prepare('DELETE FROM product_materials WHERE product_id = ?')->execute([$productId]);
+        $insert = $pdo->prepare('INSERT INTO product_materials (product_id, material_id, quantity_required) VALUES (?, ?, ?)');
+        foreach ($recipe as $materialId => $quantity) {
+            $insert->execute([$productId, $materialId, $quantity]);
+        }
+        $pdo->commit();
+        prod_out(['ok' => true, 'id' => $productId, 'price' => $price, 'message' => 'Product recipe saved in MySQL.']);
     }
 
     if ($action !== 'add_product' && $action !== 'save_pricing') prod_fail('Unknown action.');

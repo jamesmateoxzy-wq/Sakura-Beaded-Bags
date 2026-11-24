@@ -22,7 +22,7 @@
   function copy(x) { return JSON.parse(JSON.stringify(x)); }
   function setBusy(value) {
     pending = value;
-    ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd'].forEach(id => { if ($(id)) $(id).disabled = value; });
+    ['nSave','sSave','openAddProduct','openAddCategory','acSave','amAdd','sAddMaterial','nAddMaterial'].forEach(id => { if ($(id)) $(id).disabled = value; });
   }
   async function request(payload, photoFile) {
     const opts = {credentials:'same-origin', cache:'no-store'};
@@ -101,7 +101,7 @@
     for (const p of list) {
       const card = document.createElement('button'); card.type='button'; card.className='prod-card'+(p.id===selectedId?' is-selected':'');
       card.innerHTML = thumbnail(p)+'<div><h3>'+esc(p.name)+'</h3><div class="cat">'+esc(p.category)+'</div><div class="price">'+pesos(p.sellingPrice)+'</div><div class="go">'+(p.id===selectedId?'Editing price →':'View costing →')+'</div></div>';
-      card.addEventListener('click',()=>selectProduct(p.id)); $('productList').appendChild(card);
+      card.addEventListener('click',()=>{if(!pending)selectProduct(p.id);}); $('productList').appendChild(card);
     }
     $('productCount').textContent=products.length+' active product'+(products.length===1?'':'s')+' · Prices per bag';
   }
@@ -114,7 +114,7 @@
     if (prefix==='s' && updateTarget!==false) $('sTarget').value=calc.price.toFixed(2);
     return calc;
   }
-  function renderRows(container, rows, changed) {
+  function renderRows(container, rows, changed, onRemove) {
     container.innerHTML=rows.length?rows.map((r,i)=>{
       const mat=lookup(r.id); const cost=mat?mat.cost:r.cost; const sub=cost*Number(r.qty);
       return '<div class="mat-row" data-i="'+i+'"><div class="mat-name">'+esc(r.name)+'</div>'+
@@ -124,7 +124,10 @@
     }).join(''):'<p class="empty">No materials yet. Click “Add material”.</p>';
     container.oninput=e=>{const row=e.target.closest('.mat-row');if(!row||!e.target.matches('[data-qty]'))return;
       rows[Number(row.dataset.i)].qty=num(e.target.value); row.querySelector('.mat-sub b').textContent=pesos((lookup(rows[Number(row.dataset.i)].id)?.cost||0)*rows[Number(row.dataset.i)].qty);changed();};
-    container.onclick=e=>{const btn=e.target.closest('[data-remove]');if(!btn)return;const row=btn.closest('.mat-row');rows.splice(Number(row.dataset.i),1);renderRows(container,rows,changed);changed();};
+    container.onclick=e=>{const btn=e.target.closest('[data-remove]');if(!btn||pending)return;
+      if(rows.length===1){toast('A product must have at least one recipe material.');return;}
+      const previous=copy(rows), row=btn.closest('.mat-row');rows.splice(Number(row.dataset.i),1);
+      renderRows(container,rows,changed,onRemove);changed();if(onRemove)onRemove(previous);};
   }
   function selectProduct(id) {
     const product=products.find(p=>p.id===id); if(!product)return;
@@ -134,8 +137,30 @@
     $('sSku').textContent='SKU: '+(draft.sku||'—')+' · '+draft.category;
     $('sName').value=draft.name; $('sCategory').value=draft.categoryId;
     $('sLabor').value=draft.labor; $('sPackaging').value=draft.packaging; $('sMarkup').value=draft.markup;
-    renderRows($('sMaterials'),draft.materials,()=>summary('s',draft));
+    renderSelectedMaterials();
     summary('s',draft); listProducts();
+  }
+  function renderSelectedMaterials() {
+    renderRows($('sMaterials'),draft.materials,()=>summary('s',draft),previous=>saveSelectedRecipe(previous,'remove',false));
+  }
+  async function saveSelectedRecipe(previous, action, propagateError) {
+    setBusy(true);
+    let savedId = null;
+    try {
+      const saved = await request(recipePayload(draft));
+      savedId = saved.id;
+      await reloadAndSelect(saved.id);
+    } catch (e) {
+      if (savedId === null) {
+        draft.materials = previous;
+        renderSelectedMaterials();
+        summary('s',draft);
+        if (propagateError) throw e;
+        toast('Could not '+action+' material: '+e.message);
+      } else {
+        toast('Recipe saved, but product data could not refresh: '+e.message);
+      }
+    } finally { setBusy(false); }
   }
   function addToRecipe(recipe,entry) {
     const found=recipe.find(m=>m.id===entry.id);
@@ -175,6 +200,7 @@
     return true;
   }
   function payload(p,action) { return {action,id:p.id||undefined,name:p.name.trim(),categoryId:Number(p.categoryId),labor:Number(p.labor),packaging:Number(p.packaging),markup:Number(p.markup),materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
+  function recipePayload(p) { return {action:'save_recipe',id:p.id,materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
   async function reloadAndSelect(id) {
     const data=await request(); materials=data.materials||[]; products=data.products||[]; categories=data.categories||[]; csrf=data.csrf||'';
     populateCategories();
@@ -232,13 +258,18 @@
       $('sMarkup').value=draft.markup;summary('s',draft,false);
     });
     $('sReset').addEventListener('click',()=>{if(selectedId!==null)selectProduct(selectedId);toast('Unsaved changes reset.');});
-    $('sAddMaterial').addEventListener('click',()=>{if(!draft)return;addMaterialModal('Adding to '+draft.name+' costing sheet',entry=>{
-      addToRecipe(draft.materials,entry);renderRows($('sMaterials'),draft.materials,()=>summary('s',draft));summary('s',draft);});});
+    $('sAddMaterial').addEventListener('click',()=>{if(!draft)return;addMaterialModal('Adding to '+draft.name+' costing sheet',async entry=>{
+      const previous=copy(draft.materials);
+      addToRecipe(draft.materials,entry);renderSelectedMaterials();summary('s',draft);
+      await saveSelectedRecipe(previous,'add',true);
+    });});
     $('amMaterial').addEventListener('change',materialAmount); $('amQty').addEventListener('input',materialAmount);
-    $('amAdd').addEventListener('click',()=>{const m=currentChoice(),q=num($('amQty').value);
+    $('amAdd').addEventListener('click',async()=>{const m=currentChoice(),q=num($('amQty').value);
       if(!m||!Number.isFinite(q)||q<0.01||q>1000000||Math.abs(q*100-Math.round(q*100))>0.000001){toast('Enter a valid quantity (up to 2 decimals).');return;}
-      if(onAddMaterial) onAddMaterial({id:m.id,name:m.name,unit:m.unit,qty:q,cost:m.cost});
-      S.closeModal('addMaterialModal');toast('Material added to product recipe.');
+      try{
+        if(onAddMaterial) await onAddMaterial({id:m.id,name:m.name,unit:m.unit,qty:q,cost:m.cost});
+        S.closeModal('addMaterialModal');toast('Material added to product recipe.');
+      }catch(e){toast('Could not save material to product: '+e.message);}
     });
     $('openAddProduct').addEventListener('click',()=>{
       if(!materials.length){toast('Add materials in Inventory first.');return;}

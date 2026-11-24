@@ -11,7 +11,6 @@
   var activeGroup = 'all';
   var activeOrderId = '';
   var detailOrder = null;
-  var currentBom = [];
   var busy = false;
   var pendingOrderAction = '';
   var requestKey = '';
@@ -100,7 +99,6 @@
   }
   function syncProduct() {
     var p = product();
-    currentBom = p ? p.materials.slice() : [];
     $('ordLabor').value = p ? p.labor : 0;
     $('ordPackaging').value = p ? p.packaging : 0;
     $('ordDpPolicy').value = p ? p.downPaymentPercent : 50;
@@ -109,7 +107,8 @@
   function renderBom() {
     var p = product();
     var qty = Math.max(1, Math.floor(orderQty() || 1));
-    $('ordBomRows').innerHTML = currentBom.map(function (m) {
+    $('ordBomTitle').textContent = p ? 'Bill of Materials — ' + p.name : 'Bill of Materials';
+    $('ordBomRows').innerHTML = (p ? p.materials : []).map(function (m) {
       var needed = Number(m.qty) * qty;
       return '<tr><td>' + esc(m.name) + '</td><td>' + esc(needed.toFixed(2)) + ' ' + esc(m.unit) +
         '</td><td>' + money(m.cost) + '</td><td>' + money(needed * m.cost) + '</td><td>—</td></tr>';
@@ -164,8 +163,11 @@
       return !archived(o);
     }).length;
     $('ordProduction').textContent = orders.filter(currentProduction).length;
+    var isArchiveView = activeGroup === 'archived';
+    document.querySelector('.orders-current').hidden = isArchiveView;
+    $('ordNew').hidden = isArchiveView;
     $('ordRows').innerHTML = shown.map(function (o) {
-      return '<tr data-view="' + esc(o.id) + '"><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
+      return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
         '</td><td>' + badge(o.status) + '</td><td>' + badge(o.delivery) + '</td><td>' + badge(o.payment) + '</td></tr>';
     }).join('');
@@ -355,8 +357,19 @@
   var submitButton = $('ordCreateForm').querySelector('button[type="submit"]');
   if (submitButton) submitButton.disabled = true;
 
-  $('ordNew').addEventListener('click', function () {
+  $('ordNew').addEventListener('click', async function () {
     if (!ready || busy || !products.length) return;
+    $('ordNew').disabled = true;
+    try { await loadData(); }
+    catch (error) {
+      notify('Could not refresh product recipes: ' + error.message);
+      $('ordNew').disabled = false;
+      return;
+    }
+    if (!products.length) {
+      notify('There are no active products available for a new order.');
+      return;
+    }
     resetNewForm();
     openModal('ordCreateModal');
   });
