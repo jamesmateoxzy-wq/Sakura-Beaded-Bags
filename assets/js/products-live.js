@@ -243,6 +243,7 @@
         populateCategories();
         lastCreatedCategoryId = Number(saved.id);
         $('nCategory').value = String(lastCreatedCategoryId);
+        if(newDraft) newDraft.categoryId=Number($('nCategory').value);
         S.closeModal('addCategoryModal');
         toast('Category saved in MySQL. It is ready for new products!');
       } catch (e) {
@@ -303,7 +304,10 @@
     for(const type of ['Labor','Packaging','Markup']) $('n'+type).addEventListener('input',()=>{if(newDraft){newDraft[type.toLowerCase()]=num($('n'+type).value);summary('n',newDraft);}});
     $('nAddMaterial').addEventListener('click',()=>{if(!newDraft)return;addMaterialModal('Adding to '+(newDraft.name||'new product')+' recipe',entry=>{
       addToRecipe(newDraft.materials,entry);renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);});});
-    $('nSave').addEventListener('click',async()=>{if(pending||!valid(newDraft))return;
+    $('nSave').addEventListener('click',async()=>{if(pending||!newDraft)return;
+      newDraft.categoryId=Number($('nCategory').value);
+      newDraft.name=$('nName').value;
+      if(!valid(newDraft))return;
       setBusy(true);try{const res=await request(payload(newDraft,'add_product'),newPhoto);S.closeModal('addProductModal');clearProductPhoto();await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
       catch(e){toast(e.message);}finally{setBusy(false);}
     });
