@@ -111,7 +111,7 @@
     $(prefix+'Price').textContent=pesos(calc.price);
     $(prefix+'Profit').textContent=pesos(calc.profit);
     $(prefix+'Note').textContent=pesos(calc.materials)+' materials + '+pesos(p.labor)+' labor + '+pesos(p.packaging)+' packaging · Profit margin: '+calc.margin.toFixed(1)+'%';
-    if (prefix==='s' && updateTarget!==false) $('sTarget').value=calc.price.toFixed(2);
+    if (prefix==='s' && updateTarget!==false) { $('sTarget').value=calc.price.toFixed(2); $('sTarget').setCustomValidity(''); }
     return calc;
   }
   function renderRows(container, rows, changed, onRemove) {
@@ -189,6 +189,7 @@
   }
   function valid(p) {
     if(!p||!p.name||!p.name.trim()||p.name.trim().length>160){toast('Enter a valid product name.');return false;}
+    if(products.some(other=>other.id!==p.id && Number(other.categoryId)===Number(p.categoryId) && other.name.trim().toLowerCase()===p.name.trim().toLowerCase())){toast('A product with this name already exists in this collection.');return false;}
     if(!categories.some(c=>c.id===Number(p.categoryId))){toast('Choose a valid category.');return false;}
     if(!Array.isArray(p.materials)||p.materials.length===0){toast('Add at least one recipe material.');return false;}
     for(const field of ['labor','packaging','markup']){
@@ -255,7 +256,7 @@
     for(const type of ['Labor','Packaging','Markup']) $('s'+type).addEventListener('input',()=>{if(draft){draft[type.toLowerCase()]=num($('s'+type).value);summary('s',draft);}});
     $('sTarget').addEventListener('input',()=>{if(!draft)return;
       const cost=prices(draft).cost, target=num($('sTarget').value);
-      if(!Number.isFinite(target)||target<cost){$('sTarget').setCustomValidity('Target price must cover the cost.');return;}
+      if(!Number.isFinite(target)||target<=0||target<cost||target>100000000){$('sTarget').setCustomValidity('Enter a positive target price that covers the cost and does not exceed ₱100,000,000.');return;}
       $('sTarget').setCustomValidity(''); draft.markup=cost?Math.max(0,Math.round((target/cost-1)*10000)/100):0;
       $('sMarkup').value=draft.markup;summary('s',draft,false);
     });
@@ -306,7 +307,10 @@
       setBusy(true);try{const res=await request(payload(newDraft,'add_product'),newPhoto);S.closeModal('addProductModal');clearProductPhoto();await reloadAndSelect(res.id);toast('Product saved to MySQL!');}
       catch(e){toast(e.message);}finally{setBusy(false);}
     });
-    $('sSave').addEventListener('click',async()=>{if(pending||!valid(draft))return;
+    $('sSave').addEventListener('click',async()=>{if(pending||!draft)return;
+      const target=$('sTarget');
+      if(!target.checkValidity() || Number(target.value)<=0 || Number(target.value)<prices(draft).cost){target.reportValidity();toast('Invalid target price. Enter a positive price that covers the cost.');return;}
+      if(!valid(draft))return;
       setBusy(true);try{const res=await request(payload(draft,'save_pricing'));await reloadAndSelect(res.id);toast('Product costing saved to MySQL!');}
       catch(e){toast(e.message);}finally{setBusy(false);}
     });
