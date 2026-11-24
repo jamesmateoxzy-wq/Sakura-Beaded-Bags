@@ -33,7 +33,7 @@ require_once __DIR__ . '/../includes/header.php';
         </select>
       </label>
     </div>
-    <div class="rep-actions">
+    <div class="rep-actions"><a class="btn btn-outline" href="expenses.php">Manage Expenses</a>
       <button type="button" class="btn rep-export-csv" id="repExport"><?= icon('download') ?><span>Export CSV</span></button>
       <button type="button" class="btn btn-primary rep-export-pdf" id="repPrint"><?= icon('document') ?><span>Export PDF</span></button>
     </div>
@@ -50,9 +50,9 @@ require_once __DIR__ . '/../includes/header.php';
       <small>Materials, labor &amp; overhead</small>
     </article>
     <article class="card rep-stat">
-      <div><span>Net Profit</span><?= icon('reports') ?></div>
+      <div><span>Estimated Profit</span><?= icon('reports') ?></div>
       <strong id="repProfit">₱0</strong>
-      <small id="repProfitNote">0.0% net profit margin</small>
+      <small id="repProfitNote">0.0% estimated profit margin</small>
     </article>
     <article class="card rep-stat">
       <div><span>Orders</span><?= icon('orders') ?></div>
@@ -87,11 +87,11 @@ require_once __DIR__ . '/../includes/header.php';
         <tbody id="repExpensesTable"></tbody>
       </table>
       <p class="rep-empty" id="repExpensesEmpty" hidden>No expense records for this period.</p>
-      <div class="rep-net-profit"><strong>Net Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
+      <div class="rep-net-profit"><strong>Estimated Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
     </section>
     <section class="card rep-glance-card">
       <h2 id="repGlanceTitle">No activity yet</h2>
-      <div class="rep-margin-row"><span>Net profit margin</span><strong id="repMargin">0.0%</strong></div>
+      <div class="rep-margin-row"><span>Estimated profit margin</span><strong id="repMargin">0.0%</strong></div>
       <div class="rep-margin-track"><span id="repMarginBar"></span></div>
       <p id="repGlanceText">No sales or expenses recorded for this period.</p>
       <small id="repCalculation">Revenue: ₱0 - Expenses: ₱0</small>
