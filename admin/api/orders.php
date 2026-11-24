@@ -117,14 +117,17 @@ function ord_get(PDO $pdo): void {
 
     $orders = [];
     $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d');
-    $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
+    $orderQuery = $pdo->prepare('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
             c.customer_id, c.full_name,
             b.order_total, b.amount_paid, b.balance_due, b.payment_status
         FROM customer_orders o
         JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
-        ORDER BY o.order_id DESC LIMIT 100')->fetchAll();
+        LEFT JOIN (SELECT order_id FROM customer_orders ORDER BY order_id DESC LIMIT 100) recent ON recent.order_id=o.order_id
+        WHERE recent.order_id IS NOT NULL OR (o.due_date < ? AND o.archived_at IS NULL AND o.production_status <> \'Cancelled\' AND o.delivery_status NOT IN (\'Delivered\',\'Returned\'))
+        ORDER BY o.order_id DESC');
+    $orderQuery->execute([$today]); $rows=$orderQuery->fetchAll();
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
         $orders[$id] = [
