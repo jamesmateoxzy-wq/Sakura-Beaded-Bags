@@ -41,6 +41,7 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="card" id="costSheet">
       <h2 id="sTitle"></h2>
       <p class="card-sub" id="sSku"></p>
+      <div class="field"><label for="sPhoto">Replace product photo (JPG, PNG, WebP; up to 4 MB)</label><input class="input" type="file" id="sPhoto" accept="image/jpeg,image/png,image/webp"><button type="button" class="btn btn-outline btn-sm" id="sPhotoSave">Save photo</button></div>
 
       <div class="form-row sheet-top">
         <div class="field">
@@ -179,7 +180,7 @@ require_once __DIR__ . '/../includes/header.php';
       <div id="nMaterials" class="mat-list"></div>
 
       <div class="form-row three">
-        <div class="field"><label for="nLabor">Labor (₱) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nLabor" value="0"></div>
+        <div class="field"><small class="hint" id="nLaborHint"></small><label for="nLabor">Labor (₱) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nLabor" value="0"></div>
         <div class="field"><label for="nPackaging">Packaging (₱) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nPackaging" value="0"></div>
         <div class="field"><label for="nMarkup">Markup on cost (%) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nMarkup" value="100"></div>
       </div>
