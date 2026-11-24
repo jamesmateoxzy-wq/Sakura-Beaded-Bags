@@ -15,8 +15,10 @@ header('X-Content-Type-Options: nosniff');
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/final_features.php';
 
 function prod_out(array $data, int $status = 200): void {
+    if (($data['ok']??false) && ($_SERVER['REQUEST_METHOD']??'')==='POST') sbb_log_success('Products',$GLOBALS['action']??null);
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
@@ -179,7 +181,7 @@ function prod_catalog(PDO $pdo): array {
         $_SESSION['sbb_products_csrf'] = bin2hex(random_bytes(32));
     }
     return ['ok' => true, 'categories' => $categories, 'materials' => $materials,
-        'products' => $products, 'csrf' => $_SESSION['sbb_products_csrf']];
+        'products' => $products, 'defaults' => sbb_optional_settings($pdo), 'csrf' => $_SESSION['sbb_products_csrf']];
 }
 
 $uploadedPhotoDiskPath = null;
@@ -206,7 +208,20 @@ try {
         prod_fail('JSON or multipart form data required.', 415);
     }
     $action = $body['action'] ?? '';
-    if ($photoUpload !== null && $action !== 'add_product') prod_fail('Photos are only supported for new products.');
+    if ($photoUpload !== null && !in_array($action,['add_product','replace_photo'],true)) prod_fail('Photo upload not supported for this action.');
+    if ($action === 'replace_photo') {
+        if ($photoUpload === null) prod_fail('Choose a photo first.');
+        $productId = prod_positive_id($body['id'] ?? null, 'product');
+        $pdo->beginTransaction();
+        $stmt=$pdo->prepare('SELECT product_id FROM products WHERE product_id=? AND is_active=1 FOR UPDATE');
+        $stmt->execute([$productId]);
+        if (!$stmt->fetchColumn()) throw new InvalidArgumentException('Active product not found.');
+        $storedPhoto=prod_store_photo($photoUpload);
+        $uploadedPhotoDiskPath=$storedPhoto['disk_path'];
+        $pdo->prepare('UPDATE products SET image_path=? WHERE product_id=?')->execute([$storedPhoto['image_path'],$productId]);
+        $pdo->commit();
+        prod_out(['ok'=>true,'id'=>$productId,'message'=>'Product photo updated.']);
+    }
 
     if ($action === 'add_category') {
         $name = prod_string($body['name'] ?? null, 'Category name', 100);
@@ -391,9 +406,10 @@ try {
 
     if ($action === 'add_product') {
         $stmt = $pdo->prepare('INSERT INTO products
-            (product_name, category_id, labor_cost, packaging_cost, markup_percent, selling_price)
-            VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$name, $categoryId, $labor, $packaging, $markup, $priceSql]);
+            (product_name, category_id, labor_cost, packaging_cost, markup_percent, selling_price, down_payment_percent)
+            VALUES (?, ?, ?, ?, ?, ?, ?)');
+        $defaults=sbb_optional_settings($pdo);
+        $stmt->execute([$name, $categoryId, $labor, $packaging, $markup, $priceSql, (float)($defaults['dp_policy']??50)]);
         $productId = (int) $pdo->lastInsertId();
         $letters = substr(preg_replace('/[AEIOU]/', '', preg_replace('/[^A-Z]/', '', strtoupper($name))), 0, 3);
         $prefix = str_pad($letters, 3, 'X');
