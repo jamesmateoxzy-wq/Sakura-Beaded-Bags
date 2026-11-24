@@ -171,13 +171,6 @@
     $('repGlanceTitle').textContent = label + ' at a glance';
     $('repMargin').textContent = margin.toFixed(1) + '%';
     $('repMarginBar').style.width = Math.max(0, Math.min(100, margin)) + '%';
-    $('repGlanceText').textContent = 'Estimated profit uses cost snapshots saved with orders and separately recorded expenses; it is not audited net income.';
-    $('repCalculation').textContent = formatMoney(total) + ' successful payments − ' +
-      formatMoney(data.estimatedCost / 100) + ' estimated production costs − ' +
-      formatMoney(data.extraExpenses / 100) + ' recorded other expenses';
-    $('repPrepared').textContent = 'Successful payments received: ' +
-      formatMoney(data.paid / 100) + ' · Outstanding: ' + formatMoney(data.balance / 100) +
-      ' · Currency PHP (₱)';
     renderCharts(data);
   }
 
@@ -249,8 +242,10 @@
       $('repExport').disabled = false;
       $('repPrint').disabled = false;
       render();
+      $('repPrepared').hidden = true;
     })
     .catch(error => {
+      $('repPrepared').hidden = false;
       $('repPrepared').textContent = 'Could not load reports: ' + error.message;
       if (window.Sakura && typeof Sakura.toast === 'function') Sakura.toast('Could not load Financial Reports from MySQL.');
       console.error('SBB Financial Reports:', error);
