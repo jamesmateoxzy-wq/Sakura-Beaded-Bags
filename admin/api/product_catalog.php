@@ -21,7 +21,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function catalog_response(array $payload, int $status = 200): never
+function catalog_response(array $payload, int $status = 200): void
 {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
@@ -53,7 +53,7 @@ try {
 
     $materialRows = $pdo->query(
         'SELECT material_id, material_name, unit, unit_cost, quantity_on_hand, low_stock_threshold
-         FROM materials ORDER BY material_id'
+         FROM materials WHERE is_active = 1 ORDER BY material_id'
     )->fetchAll();
 
     $materials = array_map(static fn (array $r): array => [

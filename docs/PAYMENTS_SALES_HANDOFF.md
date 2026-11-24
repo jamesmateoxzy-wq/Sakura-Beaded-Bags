@@ -2,13 +2,14 @@
 
 **Scope:** Internal Sakura Beaded Bags admin system. No customer-facing checkout and no payment gateway.
 
-**Status:** Frontend prototype with interactive DEMO behavior. This does **not** record actual business payments, charge a customer, or save anything to MySQL.
+**Status:** The Payments & Sales page uses the authorized MySQL API. Staff-entered receipts are recorded as successful payment rows; no payment gateway is connected.
 
 ## Files
 
-- admin/payments.php — page structure, fictitious seed data, summary, transactions, payment form, slip preview
+- admin/payments.php — payment summary, transaction table, payment form, and slip preview
 - assets/css/payments.css — styling matched to Phase 3 Figma, responsive layout, print receipt rules
-- assets/js/payments.js — filtering, page navigation, balance calculation, validation, demo recording, slip selection and printing
+- assets/js/payments-live.js — MySQL reads/writes, filtering, validation, void/refund confirmations, slip selection and printing
+- admin/api/payments.php — authorized, CSRF-protected and idempotent payment operations
 
 Built using the common includes/header.php, includes/footer.php, includes/functions.php, includes/config.php, assets/css/style.css, and assets/js/main.js from the frontend/login-dashboard-products branch. This working branch is based on those shared files; it does not modify the original branch or main.
 
@@ -23,38 +24,18 @@ Built using the common includes/header.php, includes/footer.php, includes/functi
 
 **Never enter real customer payment information into the demo.** Set DEMO_MODE = false and configure Google sign-in securely before deploying. USE_SAMPLE_DATA = true is also for demos only.
 
-## Current demo behavior
+## Current behavior
 
-- Four live-derived summary metrics: total order value, payments received, outstanding balance, collection rate.
+- Total Sales and Payments Received include successful payment records only; outstanding balance is calculated from successful payments.
 - Transactions searchable by slip ID, order ID, customer, method or reference, plus status filter and pagination.
-- Selects only unpaid orders; rejects empty/negative payments, excess balance, >2 decimals, future/invalid dates, duplicate reference numbers for the same method.
-- Cash receipts get an automatic demo reference; GCash / bank payments require a reference.
-- Each partial or final payment creates its own demo slip, with the remaining balance at the time of payment.
-- Printable slips are explicitly marked **DEMO ONLY**.
-- If no demo session or sample data is enabled, the page shows zeros and leaves recording disabled instead of pretending records are saved.
+- Selects only unpaid orders; server-side validation rejects invalid/over-balance payments, invalid dates and duplicate references.
+- Payment request keys prevent retry/double-submission from recording a duplicate payment.
+- Successful payments can be voided or marked fully refunded; their records remain in the database and no longer count toward sales or order balances.
+- Dashboard and Financial Reports use successful payment records, grouped by payment date.
 
-## Backend integration TODO — IMPORTANT
+## Existing-database migration
 
-The existing MySQL database integration has not been implemented in this branch. Before production:
-
-1. Create SQL tables/relationships for orders and payments, with a foreign key from payment to order.
-2. Use DECIMAL(12,2) for money (or integer cents), not floating-point storage.
-3. Replace the PHP sample arrays with authorized, parameterized SQL reads scoped to the correct order and payment records.
-4. Implement an authenticated POST endpoint to record a payment with CSRF protection and **server-side** validation of all fields.
-5. In a database transaction, lock the target order, recalculate the remaining balance, reject overpayment, insert the payment and commit. Do not trust browser-provided balances, slip IDs, or customer names.
-6. Generate unique slip IDs on the server; treat repeated requests idempotently to prevent duplicate payments. Constrain reference uniqueness where applicable.
-7. After a confirmed successful response, refresh transaction rows, order balances and summary cards from the server. **Remove** demo sessionStorage as the system of record.
-8. Wire actual data into Dashboard and Financial Reports. Ensure order cancellation/refund policy and audit history are defined.
-9. Keep Google Client ID/allowed admins configured correctly, disable demo sign-in, and test access restrictions before deployment.
-10. No real GCash, bank, or card payment is processed by this frontend. Do not claim a payment is received until staff verify it according to business policy.
-
-### Suggested data shapes
-
-Order: { id: "ORD-004", customer: "Isabel Garcia", item: "Petal Handbag", total: 1200.00 }
-
-Payment: { id: "SLP-004", orderId: "ORD-004", amount: 600.00, method: "Cash", date: "2026-10-25", reference: "CASH-1025-04", balanceAfter: 600.00 }
-
-Treat these as display contracts only, not trusted API payloads.
+For an existing database, back it up and preview/apply `scripts/migrate_sales_soft_deletion.php`. It adds payment states and material inactive flags without deleting records and updates `v_order_balances` to sum only successful payments. Never import `database/schema.sql` over an existing database.
 
 ## QA checklist
 
@@ -63,15 +44,17 @@ Treat these as display contracts only, not trusted API payloads.
 - [ ] Empty state is readable when demo data is off
 - [ ] Search by customer, order ID and slip ID
 - [ ] Status filter and pagination change results correctly
-- [ ] Recording partial payment updates summary and remaining balance
-- [ ] Paying exact remainder changes status to Fully Paid and removes order from unpaid choices
+- [ ] An unpaid order does not increase Total Sales
+- [ ] Partial and additional payments increase Total Sales by the successful amounts only
+- [ ] Paying the exact remainder changes status to Fully Paid and removes the order from unpaid choices
+- [ ] Replaying a payment request does not create a duplicate
+- [ ] Voided/refunded payments remain visible in history but are excluded from sales and balances
 - [ ] Zero, negative, too many decimals and overpayment are rejected
 - [ ] Invalid future date, missing transfer reference and duplicate reference are rejected
 - [ ] View each slip and print only the selected slip
-- [ ] Demo banner and slip warning are visible
-- [ ] Reload within the same tab restores demo additions when sessionStorage is available
+- [ ] Successful changes refresh from MySQL and display a notification
 - [ ] Logout/login flow and access control remain intact
-- [ ] Full backend/integration/security tests are still **pending**
+- [ ] Database migration and end-to-end testing against the configured MySQL instance
 
 ## Merge note
 

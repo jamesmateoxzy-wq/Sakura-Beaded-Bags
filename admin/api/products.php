@@ -1,7 +1,7 @@
 <?php
 /**
  * Sakura Beaded Bags — Products/Costing JSON API.
- * Requires the original schema plus scripts/migrate_product_catalog.php --apply.
+ * Requires the product catalog and sales/soft-deletion migrations.
  * GET returns live materials/categories/products and a session CSRF token.
  * POST creates/updates products, recipes and categories.
  * Product recipes never deduct inventory: that belongs to order processing.
@@ -16,13 +16,16 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function prod_out(array $data, int $status = 200): never {
+function prod_out(array $data, int $status = 200): void {
     http_response_code($status);
     echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
-function prod_fail(string $message, int $status = 422): never {
+function prod_fail(string $message, int $status = 422): void {
     prod_out(['ok' => false, 'error' => $message], $status);
+}
+function prod_is_list(array $value): bool {
+    return array_keys($value) === ($value === [] ? [] : range(0, count($value) - 1));
 }
 function prod_string(mixed $raw, string $label, int $max): string {
     if (!is_string($raw)) throw new InvalidArgumentException("$label is required.");
@@ -55,6 +58,20 @@ function prod_positive_id(mixed $value, string $label): int {
     $n = filter_var($raw, FILTER_VALIDATE_INT);
     if ($n === false || $n > 2147483647) throw new InvalidArgumentException("Invalid $label.");
     return $n;
+}
+function prod_category_id(mixed $value): int {
+    if (!is_int($value) && !is_string($value)) {
+        throw new InvalidArgumentException('Invalid category.');
+    }
+    $raw = (string) $value;
+    if (!preg_match('/^(0|[1-9][0-9]*)$/D', $raw)) {
+        throw new InvalidArgumentException('Invalid category.');
+    }
+    $id = filter_var($raw, FILTER_VALIDATE_INT);
+    if ($id === false || $id > 2147483647) {
+        throw new InvalidArgumentException('Invalid category.');
+    }
+    return $id;
 }
 function prod_material_id(mixed $value): int {
     if (!is_string($value) || !preg_match('/^MAT-0*([1-9][0-9]*)$/D', $value, $m)) {
@@ -130,8 +147,8 @@ function prod_catalog(PDO $pdo): array {
         'id' => sprintf('MAT-%03d', (int) $r['material_id']),
         'name' => $r['material_name'], 'unit' => $r['unit'],
         'cost' => (float) $r['unit_cost'], 'stock' => (float) $r['quantity_on_hand'],
-        'min' => (float) $r['low_stock_threshold'],
-    ], $pdo->query('SELECT material_id, material_name, unit, unit_cost, quantity_on_hand, low_stock_threshold FROM materials ORDER BY material_id')->fetchAll());
+        'min' => (float) $r['low_stock_threshold'], 'active' => (bool) $r['is_active'],
+    ], $pdo->query('SELECT material_id, material_name, unit, unit_cost, quantity_on_hand, low_stock_threshold, is_active FROM materials ORDER BY material_id')->fetchAll());
     $items = $pdo->query('SELECT pm.product_id, pm.material_id, pm.quantity_required, m.material_name, m.unit, m.unit_cost
         FROM product_materials pm JOIN materials m ON m.material_id = pm.material_id
         ORDER BY pm.product_id, pm.material_id')->fetchAll();
@@ -194,15 +211,63 @@ try {
     if ($action === 'add_category') {
         $name = prod_string($body['name'] ?? null, 'Category name', 100);
         if (strtolower($name) === 'all') throw new InvalidArgumentException('Category name is reserved.');
+        $findCategory = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_name = ? LIMIT 1');
+        $findCategory->execute([$name]);
+        $existingId = $findCategory->fetchColumn();
+        if ($existingId !== false) {
+            prod_out([
+                'ok' => true, 'id' => (int) $existingId,
+                'message' => 'Category already exists in MySQL.',
+            ]);
+        }
         $stmt = $pdo->prepare('INSERT INTO product_categories (category_name) VALUES (?)');
-        $stmt->execute([$name]);
+        try {
+            $stmt->execute([$name]);
+        } catch (PDOException $error) {
+            $findCategory->execute([$name]);
+            $existingId = $findCategory->fetchColumn();
+            if ($existingId === false) throw $error;
+            prod_out([
+                'ok' => true, 'id' => (int) $existingId,
+                'message' => 'Category already exists in MySQL.',
+            ]);
+        }
         prod_out(['ok' => true, 'id' => (int) $pdo->lastInsertId(), 'message' => 'Category saved in MySQL.'], 201);
+    }
+
+    if ($action === 'remove_product') {
+        $productId = prod_positive_id($body['id'] ?? null, 'product');
+        $pdo->beginTransaction();
+        $lock = $pdo->prepare('SELECT is_active FROM products WHERE product_id = ? FOR UPDATE');
+        $lock->execute([$productId]);
+        $active = $lock->fetchColumn();
+        if ($active === false) throw new InvalidArgumentException('Product not found. Refresh and retry.');
+
+        $usage = $pdo->prepare('SELECT COUNT(*) FROM order_items WHERE product_id = ?');
+        $usage->execute([$productId]);
+        $orderCount = (int) $usage->fetchColumn();
+        $paymentUsage = $pdo->prepare('SELECT COUNT(DISTINCT pay.payment_id)
+            FROM order_items oi JOIN payments pay ON pay.order_id = oi.order_id
+            WHERE oi.product_id = ?');
+        $paymentUsage->execute([$productId]);
+        $paymentCount = (int) $paymentUsage->fetchColumn();
+
+        if ((int)$active === 1) {
+            $pdo->prepare('UPDATE products SET is_active = 0 WHERE product_id = ?')->execute([$productId]);
+        }
+        $pdo->commit();
+        $message = $orderCount > 0
+            ? 'Product removed from the active list. ' . $orderCount . ' order item(s) and '
+                . $paymentCount . ' payment(s) remain intact.'
+            : 'Product removed from the active list.';
+        prod_out(['ok' => true, 'id' => $productId, 'message' => $message,
+            'historicalOrders' => $orderCount, 'historicalPayments' => $paymentCount]);
     }
 
     if ($action === 'save_recipe') {
         $productId = prod_positive_id($body['id'] ?? null, 'product');
         $materialItems = $body['materials'] ?? null;
-        if (!is_array($materialItems) || !array_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
+        if (!is_array($materialItems) || !prod_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
             throw new InvalidArgumentException('Choose 1 to 100 recipe materials.');
         }
         $recipe = [];
@@ -220,13 +285,19 @@ try {
         $product = $stmt->fetch();
         if (!is_array($product)) throw new InvalidArgumentException('Product not found. Refresh and retry.');
 
-        $matStmt = $pdo->prepare('SELECT unit_cost FROM materials WHERE material_id = ? FOR UPDATE');
+        $existingStmt = $pdo->prepare('SELECT material_id FROM product_materials WHERE product_id = ?');
+        $existingStmt->execute([$productId]);
+        $existingMaterials = array_fill_keys(array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN)), true);
+        $matStmt = $pdo->prepare('SELECT unit_cost, is_active FROM materials WHERE material_id = ? FOR UPDATE');
         $materialTotal = 0.0;
         foreach ($recipe as $materialId => $quantity) {
             $matStmt->execute([$materialId]);
-            $cost = $matStmt->fetchColumn();
-            if ($cost === false) throw new InvalidArgumentException('A material no longer exists. Refresh and retry.');
-            $materialTotal += round((float) $quantity * (float) $cost, 2);
+            $material = $matStmt->fetch();
+            if (!$material) throw new InvalidArgumentException('A material no longer exists. Refresh and retry.');
+            if (!(int)$material['is_active'] && !isset($existingMaterials[$materialId])) {
+                throw new InvalidArgumentException('Choose an active material for this product recipe.');
+            }
+            $materialTotal += round((float) $quantity * (float) $material['unit_cost'], 2);
         }
         $total = $materialTotal + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'];
         $price = round($total * (1 + (float) $product['markup_percent'] / 100), 2);
@@ -247,12 +318,12 @@ try {
 
     if ($action !== 'add_product' && $action !== 'save_pricing') prod_fail('Unknown action.');
     $name = prod_string($body['name'] ?? null, 'Product name', 160);
-    $categoryId = prod_positive_id($body['categoryId'] ?? null, 'category');
+    $categoryId = prod_category_id($body['categoryId'] ?? null);
     $labor = prod_number($body['labor'] ?? null, 'Labor cost', 1000000);
     $packaging = prod_number($body['packaging'] ?? null, 'Packaging cost', 1000000);
     $markup = prod_number($body['markup'] ?? null, 'Markup percent', 999.99);
     $materialItems = $body['materials'] ?? null;
-    if (!is_array($materialItems) || !array_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
+    if (!is_array($materialItems) || !prod_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
         throw new InvalidArgumentException('Choose 1 to 100 recipe materials.');
     }
     $recipe = [];
@@ -267,16 +338,29 @@ try {
     $pdo->beginTransaction();
     $categoryStmt = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_id = ?');
     $categoryStmt->execute([$categoryId]);
-    if (!$categoryStmt->fetchColumn()) throw new InvalidArgumentException('Category was not found. Refresh and retry.');
+    if ($categoryStmt->fetchColumn() === false) throw new InvalidArgumentException('Category was not found. Refresh and retry.');
 
     // Use actual current catalog unit costs, not client-provided prices.
-    $matStmt = $pdo->prepare('SELECT unit_cost FROM materials WHERE material_id = ? FOR UPDATE');
+    $existingMaterials = [];
+    if ($productId !== null) {
+        $existingProduct = $pdo->prepare('SELECT product_id FROM products WHERE product_id = ? AND is_active = 1 FOR UPDATE');
+        $existingProduct->execute([$productId]);
+        if (!$existingProduct->fetchColumn()) throw new InvalidArgumentException('Product not found. Refresh and retry.');
+        $existingStmt = $pdo->prepare('SELECT material_id FROM product_materials WHERE product_id = ?');
+        $existingStmt->execute([$productId]);
+        $existingMaterials = array_fill_keys(array_map('intval', $existingStmt->fetchAll(PDO::FETCH_COLUMN)), true);
+    }
+
+    $matStmt = $pdo->prepare('SELECT unit_cost, is_active FROM materials WHERE material_id = ? FOR UPDATE');
     $materialTotal = 0.0;
     foreach ($recipe as $matId => $qty) {
         $matStmt->execute([$matId]);
-        $cost = $matStmt->fetchColumn();
-        if ($cost === false) throw new InvalidArgumentException('A material no longer exists. Refresh and retry.');
-        $materialTotal += round((float) $qty * (float) $cost, 2);
+        $material = $matStmt->fetch();
+        if (!$material) throw new InvalidArgumentException('A material no longer exists. Refresh and retry.');
+        if (!(int)$material['is_active'] && !isset($existingMaterials[$matId])) {
+            throw new InvalidArgumentException('Choose an active material for this product recipe.');
+        }
+        $materialTotal += round((float) $qty * (float) $material['unit_cost'], 2);
     }
     $total = $materialTotal + (float) $labor + (float) $packaging;
     $price = round($total * (1 + (float) $markup / 100), 2);
@@ -297,9 +381,6 @@ try {
         $stmt = $pdo->prepare('UPDATE products SET sku = ? WHERE product_id = ?');
         $stmt->execute([$sku, $productId]);
     } else {
-        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE product_id = ? AND is_active = 1 FOR UPDATE');
-        $stmt->execute([$productId]);
-        if (!$stmt->fetchColumn()) throw new InvalidArgumentException('Product not found. Refresh and retry.');
         $stmt = $pdo->prepare('UPDATE products SET product_name = ?, category_id = ?, labor_cost = ?,
             packaging_cost = ?, markup_percent = ?, selling_price = ? WHERE product_id = ?');
         $stmt->execute([$name, $categoryId, $labor, $packaging, $markup, $priceSql, $productId]);

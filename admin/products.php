@@ -1,71 +1,9 @@
 <?php
-/**
- * PRODUCT COSTING & PRICING  (frontend)
- * ------------------------------------------------------------
- * USE_SAMPLE_DATA (includes/config.php):
- *   false -> what a brand-new database shows (no products, no materials)
- *   true  -> the Figma sample products
- * Backend teammate: replace the two lines that set $materials and $products
- * with MySQL queries that return the SAME keys as the sample arrays.
- * The page prints them as JSON and assets/js/products.js does the rest.
- *
- *   $categories -> product collections
- *   $materials  -> the inventory list (used by the "Add material" pop-up)
- *   $products   -> each product with its materials, labor, packaging, markup
- *
- * Saving is done with fetch() in products.js (see the TODO (backend) notes).
- */
+/** Product Costing & Pricing; live data and writes use the authorized MySQL API. */
 require_once __DIR__ . '/../includes/functions.php';
 require_once __DIR__ . '/../includes/config.php';
 
-$categories = ['Signature collection', 'Pink collection', 'Pearl collection'];
-
-$sampleMaterials = [
-    ['id' => 'MAT-001', 'name' => 'Pink Beads',         'unit' => 'pcs',  'cost' => 2.00,  'stock' => 10],
-    ['id' => 'MAT-002', 'name' => 'Nylon Thread',       'unit' => 'roll', 'cost' => 40.00, 'stock' => 3],
-    ['id' => 'MAT-003', 'name' => 'Bag Handles',        'unit' => 'pcs',  'cost' => 55.00, 'stock' => 5],
-    ['id' => 'MAT-004', 'name' => 'Rose Crystal Beads', 'unit' => 'pcs',  'cost' => 2.00,  'stock' => 600],
-    ['id' => 'MAT-005', 'name' => 'Ivory Pearl Beads',  'unit' => 'pcs',  'cost' => 3.00,  'stock' => 450],
-    ['id' => 'MAT-006', 'name' => 'Clasps',             'unit' => 'pcs',  'cost' => 30.00, 'stock' => 4],
-    ['id' => 'MAT-007', 'name' => 'Pink Ribbon',        'unit' => 'roll', 'cost' => 25.00, 'stock' => 2],
-];
-
-$sampleProducts = [
-    [
-        'id' => 1, 'sku' => 'SAK-HRT-001', 'name' => 'Heart Bag', 'category' => 'Signature collection',
-        'image' => 'heart-bag.jpg',
-        'materials' => [
-            ['name' => 'Rose Crystal Beads', 'unit' => 'pcs',  'qty' => 100, 'cost' => 2.00],
-            ['name' => 'Nylon Thread',       'unit' => 'roll', 'qty' => 1,   'cost' => 40.00],
-            ['name' => 'Bag Handles',        'unit' => 'pcs',  'qty' => 2,   'cost' => 55.00],
-        ],
-        'labor' => 200, 'packaging' => 50, 'markup' => 100,   // = P1,200
-    ],
-    [
-        'id' => 2, 'sku' => 'SAK-PNK-002', 'name' => 'Pink Bag', 'category' => 'Pink collection',
-        'image' => 'pink-bag.jpg',
-        'materials' => [
-            ['name' => 'Pink Beads',   'unit' => 'pcs',  'qty' => 100, 'cost' => 2.00],
-            ['name' => 'Nylon Thread', 'unit' => 'roll', 'qty' => 1,   'cost' => 40.00],
-            ['name' => 'Clasps',       'unit' => 'pcs',  'qty' => 2,   'cost' => 30.00],
-        ],
-        'labor' => 150, 'packaging' => 50, 'markup' => 70,    // = P850
-    ],
-    [
-        'id' => 3, 'sku' => 'SAK-PRL-003', 'name' => 'Pearl Tote', 'category' => 'Pearl collection',
-        'image' => 'pearl-tote.jpg',
-        'materials' => [
-            ['name' => 'Ivory Pearl Beads', 'unit' => 'pcs',  'qty' => 100, 'cost' => 3.00],
-            ['name' => 'Nylon Thread',      'unit' => 'roll', 'qty' => 1,   'cost' => 40.00],
-            ['name' => 'Bag Handles',       'unit' => 'pcs',  'qty' => 2,   'cost' => 55.00],
-        ],
-        'labor' => 250, 'packaging' => 50, 'markup' => 100,   // = P1,500
-    ],
-];
-
-// TODO (backend): replace these two lines with database queries
-$materials = USE_SAMPLE_DATA ? $sampleMaterials : [];
-$products  = USE_SAMPLE_DATA ? $sampleProducts  : [];
+$categories = [];
 
 $pageTitle    = 'Product Costing & Pricing';
 $pageSubtitle = 'Thoughtful pricing for every handcrafted piece.';
@@ -143,6 +81,7 @@ require_once __DIR__ . '/../includes/header.php';
         </div>
         <div class="actions">
           <button type="button" class="btn btn-outline" id="sReset">Reset</button>
+          <button type="button" class="btn btn-outline" id="sRemoveProduct">Remove Product</button>
           <button type="button" class="btn btn-primary" id="sSave"><?= icon('check') ?> Save Pricing</button>
         </div>
       </div>
@@ -305,13 +244,6 @@ require_once __DIR__ . '/../includes/header.php';
     </div>
   </div>
 </div>
-
-<!-- Data for products.js (backend: this is where your query results go) -->
-<script>
-  window.SAKURA_CATEGORIES = <?= json_encode($categories, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
-  window.SAKURA_MATERIALS  = <?= json_encode($materials,  JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
-  window.SAKURA_PRODUCTS   = <?= json_encode($products,   JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
-</script>
 
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
 

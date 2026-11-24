@@ -1,8 +1,6 @@
 <?php
 /**
- * Order Management — Sakura admin frontend.
- * All sample orders and edits are demonstration data until a MySQL API exists.
- * Handoff: docs/OPERATIONS_HANDOFF.md
+ * Order Management — Sakura admin frontend backed by the protected MySQL API.
  */
 require_once __DIR__ . '/../includes/config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();

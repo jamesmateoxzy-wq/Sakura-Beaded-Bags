@@ -13,12 +13,12 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function ord_out(array $v, int $status = 200): never {
+function ord_out(array $v, int $status = 200): void {
     http_response_code($status);
     echo json_encode($v, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
 }
-function ord_fail(string $message, int $status = 422): never {
+function ord_fail(string $message, int $status = 422): void {
     ord_out(['ok' => false, 'error' => $message], $status);
 }
 function ord_id(mixed $v, string $label): int {
@@ -71,7 +71,7 @@ if (!in_array($method, ['GET', 'POST'], true)) {
     header('Allow: GET, POST'); ord_fail('Method not allowed.', 405);
 }
 
-function ord_get(PDO $pdo): never {
+function ord_get(PDO $pdo): void {
     $products = [];
     $stmt = $pdo->query('SELECT p.product_id, p.sku, p.product_name, p.selling_price, p.labor_cost,
             p.packaging_cost, p.other_cost, p.down_payment_percent,
@@ -79,7 +79,13 @@ function ord_get(PDO $pdo): never {
         FROM products p
         LEFT JOIN product_categories c ON c.category_id = p.category_id
         JOIN v_product_costing v ON v.product_id = p.product_id
-        WHERE p.is_active = 1 ORDER BY p.product_id');
+        WHERE p.is_active = 1
+          AND NOT EXISTS (
+              SELECT 1 FROM product_materials pm
+              JOIN materials m ON m.material_id = pm.material_id
+              WHERE pm.product_id = p.product_id AND m.is_active = 0
+          )
+        ORDER BY p.product_id');
     foreach ($stmt->fetchAll() as $row) {
         $id = (int) $row['product_id'];
         $products[$id] = [
@@ -208,13 +214,14 @@ function ord_create(PDO $pdo, array $data): array {
     if (!$recipe) throw new InvalidArgumentException('This product has no material recipe. Set it up in Products first.');
     $materials = [];
     $materialsCost = 0.0;
-    $lock = $pdo->prepare('SELECT material_id, material_name, unit_cost, quantity_on_hand FROM materials
+    $lock = $pdo->prepare('SELECT material_id, material_name, unit_cost, quantity_on_hand, is_active FROM materials
         WHERE material_id = ? FOR UPDATE');
     foreach ($recipe as $item) {
         $mid = (int) $item['material_id'];
         $lock->execute([$mid]);
         $mat = $lock->fetch();
         if (!$mat) throw new InvalidArgumentException('A product material no longer exists. Refresh and retry.');
+        if (!(int)$mat['is_active']) throw new InvalidArgumentException('A product material is inactive. Update the product recipe before accepting new orders.');
         $perBag = (float) $item['quantity_required'];
         $needed = round($perBag * $qty, 2);
         if ($perBag <= 0 || $needed <= 0 || $needed > 1000000) {
@@ -281,7 +288,8 @@ function ord_cancel(PDO $pdo, array $data): array {
         throw new InvalidArgumentException('This order cannot be cancelled.');
     }
     // Paid orders require an explicit refund workflow. Never restore stock automatically.
-    $paidQuery = $pdo->prepare('SELECT COUNT(*) FROM payments WHERE order_id = ?');
+    $paidQuery = $pdo->prepare("SELECT COUNT(*) FROM payments
+        WHERE order_id = ? AND payment_status = 'Successful'");
     $paidQuery->execute([$orderId]);
     if ((int) $paidQuery->fetchColumn() > 0) {
         throw new InvalidArgumentException('This order has a recorded payment. Refund/void the payment before cancelling the order.');
@@ -357,7 +365,8 @@ function ord_advance(PDO $pdo, array $data): array {
             FROM order_items WHERE order_id = ?');
         $totals->execute([$orderId]);
         $total = (int) round((float)$totals->fetchColumn() * 100);
-        $paid = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE order_id = ?');
+        $paid = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments
+            WHERE order_id = ? AND payment_status = 'Successful'");
         $paid->execute([$orderId]);
         $received = (int) round((float)$paid->fetchColumn() * 100);
         if ($total <= 0 || $received < $total) {

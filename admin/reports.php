@@ -1,7 +1,7 @@
 <?php
 /**
- * Financial Reports — Sakura admin frontend.
- * Fictitious order and payment summary; NOT reconciled accounting information.
+ * Financial Reports — MySQL-backed Sakura admin frontend.
+ * Payment-based sales and estimated costs are not audited accounting information.
  * Handoff: docs/OPERATIONS_HANDOFF.md
  */
 require_once __DIR__ . '/../includes/config.php';

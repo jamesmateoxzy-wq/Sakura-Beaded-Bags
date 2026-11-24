@@ -1,7 +1,7 @@
 <?php
 /**
  * Sakura Beaded Bags - Financial Reports (read-only MySQL API).
- * All financial figures are estimates/booked amounts, not audited accounting.
+ * Sales are successful payment records; profit remains an estimate, not audited accounting.
  * Relies on saved order_items.estimated_unit_cost snapshots, not current product costs.
  */
 declare(strict_types=1);
@@ -12,7 +12,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
 
-function report_reply(array $payload, int $status = 200): never {
+function report_reply(array $payload, int $status = 200): void {
     http_response_code($status);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
@@ -36,7 +36,7 @@ try {
     $db = sbb_db();
     // Aggregate items and payments independently to avoid multiplying amounts
     // when an order has more than one item and more than one payment.
-    // Exclude cancelled orders, which should not be recognized as booked sales.
+    // Exclude cancelled orders and non-successful payments from the report.
     $stmt = $db->query(<<<'SQL'
 SELECT o.order_id, DATE(o.order_date) AS order_day, o.production_status,
        COALESCE(items.booked_value, 0.00) AS booked_value,
@@ -53,6 +53,7 @@ LEFT JOIN (
 LEFT JOIN (
     SELECT order_id, SUM(amount) AS paid_value
     FROM payments
+    WHERE payment_status = 'Successful'
     GROUP BY order_id
 ) AS receipts ON receipts.order_id = o.order_id
 WHERE o.production_status <> 'Cancelled'
@@ -60,7 +61,7 @@ ORDER BY o.order_date DESC, o.order_id DESC
 SQL);
 
     $orders = [];
-    $totals = ['bookedSales' => 0.0, 'estimatedProductionCost' => 0.0, 'receivedForOrders' => 0.0, 'balanceDue' => 0.0];
+    $totals = ['bookedSales' => 0.0, 'totalSales' => 0.0, 'estimatedProductionCost' => 0.0, 'receivedForOrders' => 0.0, 'balanceDue' => 0.0];
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         $sale = (float) $row['booked_value'];
         $cost = (float) $row['estimated_cost'];
@@ -76,9 +77,27 @@ SQL);
             'balance' => $balance,
         ];
         $totals['bookedSales'] += $sale;
+        $totals['totalSales'] += $paid;
         $totals['estimatedProductionCost'] += $cost;
         $totals['receivedForOrders'] += $paid;
         $totals['balanceDue'] += $balance;
+    }
+
+    $paymentStmt = $db->query(<<<'SQL'
+SELECT pay.payment_id, pay.order_id, DATE(pay.payment_date) AS payment_day, pay.amount
+FROM payments AS pay
+INNER JOIN customer_orders AS o ON o.order_id = pay.order_id
+WHERE pay.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
+ORDER BY pay.payment_date ASC, pay.payment_id ASC
+SQL);
+    $payments = [];
+    foreach ($paymentStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $payments[] = [
+            'id' => (int) $row['payment_id'],
+            'orderId' => sprintf('ORD-%03d', (int) $row['order_id']),
+            'date' => (string) $row['payment_day'],
+            'amount' => (float) $row['amount'],
+        ];
     }
 
     $expenses = [];
@@ -98,7 +117,7 @@ SQL);
     }
 
     $totals['operatingExpenses'] = $operatingTotal;
-    $totals['estimatedProfit'] = $totals['bookedSales'] - $totals['estimatedProductionCost'] - $operatingTotal;
+    $totals['estimatedProfit'] = $totals['totalSales'] - $totals['estimatedProductionCost'] - $operatingTotal;
     $totals['orderCount'] = count($orders);
     foreach ($totals as $key => $val) {
         if ($key !== 'orderCount') $totals[$key] = round((float) $val, 2);
@@ -107,15 +126,16 @@ SQL);
     report_reply([
         'ok' => true,
         'orders' => $orders,
+        'payments' => $payments,
         'expenses' => $expenses,
         'summary' => $totals,
         'methodology' => [
-            'sales' => 'Booked order value for non-cancelled orders, grouped by order date; not necessarily cash received.',
+            'sales' => 'Successful payments for non-cancelled orders, grouped by payment date. Cancelled and refunded payments are excluded.',
             'productionCost' => 'Estimated production cost saved on each order item at order creation.',
             'operatingExpenses' => 'Separate entries in the expenses table, grouped by their expense date.',
             'received' => 'Payments received toward selected orders regardless of the payment date.',
-            'profit' => 'Estimate: booked sales minus saved estimated production cost and recorded operating expenses. Not audited net income.',
-            'limitations' => 'No refunds, taxes, accruals, or automated payroll/expense entry. Do not record production costs in expenses again or they will be double-counted.',
+            'profit' => 'Estimate: successful payments minus saved estimated production cost and recorded operating expenses. Not audited net income.',
+            'limitations' => 'Refunded and cancelled payments are excluded. Taxes, accruals, and automated payroll/expense entry are not included. Do not record production costs in expenses again or they will be double-counted.',
         ],
     ]);
 } catch (Throwable $e) {

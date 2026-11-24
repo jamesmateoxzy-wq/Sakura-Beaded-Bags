@@ -17,7 +17,10 @@
   function orderFor(id) { return orders.find(item => String(item.rawId) === String(id)); }
   function balance(order) { return order ? cents(order.balance) : 0; }
   function statusOf(payment) { return payment.status === 'Fully Paid' ? 'Fully Paid' : 'Partial'; }
-  function statusBadge(label) { return '<span class="badge ' + (label === 'Fully Paid' ? 'badge-green' : 'badge-amber') + '">' + esc(label) + '</span>'; }
+  function statusBadge(label) {
+    const color = label === 'Fully Paid' ? 'badge-green' : label === 'Partial' ? 'badge-amber' : 'badge-pink';
+    return '<span class="badge ' + color + '">' + esc(label) + '</span>';
+  }
   async function request(method, payload) {
     let options = {method, credentials:'same-origin', cache:'no-store', headers:{'Accept':'application/json'}};
     if (payload) { options.headers['Content-Type'] = 'application/json'; options.headers['X-CSRF-Token'] = csrf; options.body = JSON.stringify(payload); }
@@ -42,8 +45,8 @@
     $('paymentsReceived').textContent = peso(summary.received);
     $('outstandingBalance').textContent = peso(summary.outstanding);
     $('collectionRate').textContent = String(Number(summary.collectionRate || 0).toFixed(1)) + '%';
-    $('salesNote').textContent = String(summary.orderCount || 0) + ' non-cancelled orders';
-    $('collectionNote').textContent = peso(summary.received) + ' of ' + peso(summary.totalSales) + ' received';
+    $('salesNote').textContent = String(summary.orderCount || 0) + ' non-cancelled orders · successful payments only';
+    $('collectionNote').textContent = peso(summary.received) + ' of ' + peso(summary.orderValue) + ' order value received';
   }
   function renderOrderOptions() {
     const field = $('paymentOrder');
@@ -67,7 +70,10 @@
   function filtered() {
     const search = $('paymentSearch').value.trim().toLowerCase();
     const f = $('paymentFilter').value;
-    return payments.filter(p => (f === 'all' || (f === 'paid' ? p.status === 'Fully Paid' : p.status === 'Partial')) &&
+    return payments.filter(p => (f === 'all' ||
+      (f === 'paid' ? p.paymentStatus === 'Successful' && p.status === 'Fully Paid' :
+      f === 'partial' ? p.paymentStatus === 'Successful' && p.status === 'Partial' :
+      p.paymentStatus.toLowerCase() === f)) &&
       (!search || [p.id,p.orderId,p.customer,p.reference,p.method].join(' ').toLowerCase().includes(search)));
   }
   function renderTransactions() {
@@ -75,7 +81,14 @@
     const pages = Math.max(1, Math.ceil(rows.length / pageSize));
     page = Math.max(1, Math.min(pages, page));
     const shown = rows.slice((page - 1) * pageSize, page * pageSize);
-    $('paymentRows').innerHTML = shown.map(p => `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(p.date)}</td><td>${statusBadge(statusOf(p))}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.id)}">View Slip</button></td></tr>`).join('');
+    $('paymentRows').innerHTML = shown.map(p => {
+      const state = p.paymentStatus === 'Successful' ? statusOf(p) : p.paymentStatus;
+      const actions = p.paymentStatus === 'Successful'
+        ? '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Cancelled" data-payment-id="' + esc(p.rawId) + '">Void</button> ' +
+          '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Refunded" data-payment-id="' + esc(p.rawId) + '">Refund</button>'
+        : '—';
+      return `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(p.date)}</td><td>${statusBadge(state)}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.id)}">View Slip</button> ${actions}</td></tr>`;
+    }).join('');
     $('paymentEmpty').hidden = rows.length > 0;
     $('paymentEmpty').textContent = payments.length ? 'No payments match your search or filter.' : 'No payment records yet.';
     $('paymentCount').textContent = `Showing ${shown.length} of ${rows.length} payments · All amounts in PHP`;
@@ -85,7 +98,7 @@
     const p = payments.find(item => item.id === chosenSlip);
     $('slipEmpty').hidden = !!p;
     $('slipDetails').hidden = !p;
-    $('printSlip').disabled = !p;
+    $('printSlip').disabled = !p || p.paymentStatus !== 'Successful';
     if (!p) return;
     $('slipCustomer').textContent = p.customer;
     $('slipOrder').textContent = p.orderId + ' · ' + p.id;
@@ -94,7 +107,9 @@
     $('slipTotal').textContent = peso(p.total);
     $('slipPaid').textContent = peso(p.amount);
     $('slipBalance').textContent = peso(p.balanceAfter);
-    $('slipNote').textContent = p.balanceAfter <= 0 ? 'Order balance fully paid.' : 'Partial payment. Remaining balance: ' + peso(p.balanceAfter);
+    $('slipNote').textContent = p.paymentStatus === 'Refunded' ? 'This payment was fully refunded and is excluded from sales.' :
+      p.paymentStatus === 'Cancelled' ? 'This payment was voided and is excluded from sales.' :
+      p.balanceAfter <= 0 ? 'Order balance fully paid.' : 'Partial payment. Remaining balance: ' + peso(p.balanceAfter);
     if ($('slipDisclaimer')) $('slipDisclaimer').hidden = true;
   }
   function updateReference() {
@@ -120,7 +135,31 @@
   }
   $('paymentSearch').addEventListener('input', () => {page=1; renderTransactions();});
   $('paymentFilter').addEventListener('change', () => {page=1; renderTransactions();});
-  $('paymentRows').addEventListener('click', e => {const b=e.target.closest('[data-slip]'); if(b){chosenSlip=b.dataset.slip; renderSlip();}});
+  $('paymentRows').addEventListener('click', async e => {
+    const statusButton=e.target.closest('[data-payment-status]');
+    if(statusButton){
+      const status=statusButton.dataset.paymentStatus;
+      const paymentId=statusButton.dataset.paymentId;
+      const payment=payments.find(item=>String(item.rawId)===String(paymentId));
+      if(!payment||busy)return;
+      const prompt=status==='Refunded'
+        ? 'Confirm the full amount was returned to the customer, then mark '+payment.id+' as refunded?'
+        : 'Void '+payment.id+'? Its amount will be removed from sales and the order balance recalculated.';
+      if(!window.confirm(prompt))return;
+      busy=true;saveBtn.disabled=true;$('recordPaymentShortcut').disabled=true;
+      try{
+        const result=await request('POST',{action:'update_payment_status',paymentId:payment.rawId,status});
+        await refresh(payment.id);
+        notify(result.message||'Payment status updated.');
+      }catch(error){
+        setError(error.message||'Could not update payment status.');
+        await refresh().catch(()=>{});
+      }finally{busy=false;renderOrderOptions();}
+      return;
+    }
+    const b=e.target.closest('[data-slip]');
+    if(b){chosenSlip=b.dataset.slip;renderSlip();}
+  });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
   $('paymentOrder').addEventListener('change', updateBalanceHint);
   $('paymentMethod').addEventListener('change',updateReference);

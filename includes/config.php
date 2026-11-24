@@ -12,7 +12,7 @@
 const GOOGLE_CLIENT_ID = 'PASTE-ID';
 
 const ALLOWED_ADMIN_EMAILS = [
-    'Owner@gmail.com',
+    'owner',
     // 'groupmate@gmail.com',
 ];
 

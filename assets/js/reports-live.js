@@ -26,6 +26,7 @@
   };
 
   let orders = [];
+  let payments = [];
   let expenses = [];
   let loaded = false;
 
@@ -33,21 +34,24 @@
     const month = $('repPeriod').value || 'all';
     const match = iso => month === 'all' || monthOf(iso) === month;
     const includedOrders = orders.filter(order => match(order.date));
+    const includedPayments = payments.filter(payment => match(payment.date));
     const includedExpenses = expenses.filter(expense => match(expense.date));
-    const sales = includedOrders.reduce((sum, order) => sum + cents(order.total), 0);
+    const sales = includedPayments.reduce((sum, payment) => sum + cents(payment.amount), 0);
     const estimatedCost = includedOrders.reduce((sum, order) => sum + cents(order.estimatedCost), 0);
-    const paid = includedOrders.reduce((sum, order) => sum + cents(order.received), 0);
+    const paid = sales;
+    const orderValue = includedOrders.reduce((sum, order) => sum + cents(order.total), 0);
     const extraExpenses = includedExpenses.reduce((sum, e) => sum + cents(e.amount), 0);
     return {
-      month, includedOrders, includedExpenses, sales, estimatedCost, paid, extraExpenses,
+      month, includedOrders, includedPayments, includedExpenses, sales, estimatedCost, paid, orderValue, extraExpenses,
       totalExpenses: estimatedCost + extraExpenses,
       profit: sales - estimatedCost - extraExpenses,
-      balance: Math.max(0, sales - paid)
+      balance: includedOrders.reduce((sum, order) => sum + cents(order.balance), 0)
     };
   }
 
   function loadPeriods() {
     const months = [...new Set(orders.map(order => monthOf(order.date))
+      .concat(payments.map(payment => monthOf(payment.date)))
       .concat(expenses.map(expense => monthOf(expense.date))))]
       .filter(value => /^\d{4}-\d{2}$/.test(value)).sort().reverse();
     $('repPeriod').innerHTML = '<option value="all">All dates</option>' + months.map(month =>
@@ -81,9 +85,11 @@
       if (!series.has(key)) series.set(key, {key, revenue:0, expenses:0});
       return series.get(key);
     }
+    for (const payment of data.includedPayments) {
+      get(keyFor(payment.date)).revenue += cents(payment.amount);
+    }
     for (const order of data.includedOrders) {
       const point = get(keyFor(order.date));
-      point.revenue += cents(order.total);
       point.expenses += cents(order.estimatedCost);
     }
     for (const expense of data.includedExpenses) {
@@ -128,7 +134,7 @@
     $('repSalesTitle').textContent = granularity === 'monthly' ? 'Monthly Sales' :
       granularity === 'quarterly' ? 'Quarterly Sales' : 'Yearly Sales';
     $('repSalesSubtitle').textContent = (data.month === 'all' ? 'All dates' : shortMonth(data.month)) +
-      ' · non-cancelled booked order value';
+      ' · successful payments received';
     const last = points.length ? points[points.length - 1].revenue : 0;
     const previous = points.length > 1 ? points[points.length - 2].revenue : 0;
     $('repSalesTrend').textContent = previous ?
@@ -148,14 +154,14 @@
     const margin = data.sales ? data.profit / data.sales * 100 : 0;
     const label = data.month === 'all' ? 'All dates' : shortMonth(data.month);
     $('repRevenue').textContent = formatMoney(total);
-    $('repRevenueNote').textContent = 'Booked order value, not necessarily cash received';
+    $('repRevenueNote').textContent = 'Successful payments received in this period';
     $('repExpenses').textContent = formatMoney(costs);
     $('repProfit').textContent = formatMoney(profit);
     $('repOrders').textContent = String(data.includedOrders.length);
     $('repOrderAverage').textContent = formatMoney(data.includedOrders.length ?
-      total / data.includedOrders.length : 0) + ' average order value';
+      data.orderValue / 100 / data.includedOrders.length : 0) + ' average order value';
     $('repProfitNote').textContent = margin.toFixed(1) + '% estimated profit margin';
-    $('repAnalysisSubtitle').textContent = label + ' · booked sales minus estimated production costs and recorded expenses';
+    $('repAnalysisSubtitle').textContent = label + ' · successful payments minus estimated production costs and recorded expenses';
     const categories = expenseCategories(data);
     $('repExpensesTable').innerHTML = categories.map(item => '<tr><td>' + escapeHtml(item.name) + '</td><td>' +
       formatMoney(item.value / 100) + '</td><td>' +
@@ -166,10 +172,10 @@
     $('repMargin').textContent = margin.toFixed(1) + '%';
     $('repMarginBar').style.width = Math.max(0, Math.min(100, margin)) + '%';
     $('repGlanceText').textContent = 'Estimated profit uses cost snapshots saved with orders and separately recorded expenses; it is not audited net income.';
-    $('repCalculation').textContent = formatMoney(total) + ' booked sales − ' +
+    $('repCalculation').textContent = formatMoney(total) + ' successful payments − ' +
       formatMoney(data.estimatedCost / 100) + ' estimated production costs − ' +
       formatMoney(data.extraExpenses / 100) + ' recorded other expenses';
-    $('repPrepared').textContent = 'Received toward selected orders: ' +
+    $('repPrepared').textContent = 'Successful payments received: ' +
       formatMoney(data.paid / 100) + ' · Outstanding: ' + formatMoney(data.balance / 100) +
       ' · Currency PHP (₱)';
     renderCharts(data);
@@ -179,11 +185,10 @@
     if (!loaded) return;
     const data = summary();
     const rows = [
-      ['SAKURA BEADED BAGS - ESTIMATED FINANCIAL REPORT'],
+      ['SAKURA BEADED BAGS - PAYMENT-BASED FINANCIAL REPORT'],
       ['Period', data.month === 'all' ? 'All dates' : data.month],
       ['Metric', 'Amount PHP'],
-      ['Booked sales', (data.sales / 100).toFixed(2)],
-      ['Payments received for selected orders', (data.paid / 100).toFixed(2)],
+      ['Total sales (successful payments)', (data.sales / 100).toFixed(2)],
       ['Outstanding balance', (data.balance / 100).toFixed(2)],
       ['Estimated production costs', (data.estimatedCost / 100).toFixed(2)],
       ['Recorded other expenses', (data.extraExpenses / 100).toFixed(2)],
@@ -192,12 +197,12 @@
       ['Expense Category', 'Amount PHP']
     ];
     expenseCategories(data).forEach(entry => rows.push([entry.name, (entry.value / 100).toFixed(2)]));
-    rows.push([], ['Order', 'Date', 'Status', 'Booked Amount PHP', 'Estimated Cost PHP', 'Received PHP', 'Balance PHP']);
+    rows.push([], ['Order', 'Date', 'Status', 'Order Value PHP', 'Estimated Cost PHP', 'Received PHP', 'Balance PHP']);
     data.includedOrders.forEach(item => rows.push([item.id, item.date, item.status,
       item.total.toFixed(2), item.estimatedCost.toFixed(2), item.received.toFixed(2), item.balance.toFixed(2)]));
     rows.push([], ['Recorded Other Expense Date', 'Category', 'Description', 'Amount PHP']);
     data.includedExpenses.forEach(item => rows.push([item.date, item.category, item.description, item.amount.toFixed(2)]));
-    rows.push([], ['Notes', 'Booked sales are not necessarily cash receipts. Profit is estimated, not audited net income.']);
+    rows.push([], ['Notes', 'Sales include successful payments only; cancelled and refunded payments are excluded. Profit is estimated, not audited net income.']);
     const csv = '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
     const a = document.createElement('a');
@@ -209,14 +214,13 @@
     setTimeout(() => URL.revokeObjectURL(url), 500);
   }
 
-  // The template was originally labeled as an accounting report, but these
-  // figures are estimates/booked values. Update headings without changing layout.
+  // Figures remain estimates; revenue now uses successful payment records.
   function renameCard(valueId, label) {
     const card = $(valueId).closest('.rep-stat');
     const heading = card && card.querySelector('div span');
     if (heading) heading.textContent = label;
   }
-  renameCard('repRevenue', 'Booked Sales');
+  renameCard('repRevenue', 'Total Sales');
   renameCard('repExpenses', 'Est. Costs + Expenses');
   renameCard('repProfit', 'Estimated Profit');
   const profitLabel = $('repNetProfit').previousElementSibling;
@@ -233,11 +237,12 @@
     .then(async response => {
       const data = await response.json();
       if (!response.ok || data.ok !== true) throw new Error(data.error || 'Financial Reports API failed.');
-      if (!Array.isArray(data.orders) || !Array.isArray(data.expenses)) throw new Error('Unexpected report data.');
+      if (!Array.isArray(data.orders) || !Array.isArray(data.payments) || !Array.isArray(data.expenses)) throw new Error('Unexpected report data.');
       return data;
     })
     .then(data => {
       orders = data.orders;
+      payments = data.payments;
       expenses = data.expenses;
       loaded = true;
       loadPeriods();
