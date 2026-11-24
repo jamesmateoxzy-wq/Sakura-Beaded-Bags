@@ -12,8 +12,10 @@ header('X-Content-Type-Options: nosniff');
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/db.php';
+require_once __DIR__ . '/../../includes/final_features.php';
 
 function ord_out(array $v, int $status = 200): void {
+    if (($v['ok']??false) && !($v['duplicate']??false) && ($_SERVER['REQUEST_METHOD']??'')==='POST') sbb_log_success('Orders',$GLOBALS['action']??null);
     http_response_code($status);
     echo json_encode($v, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     exit;
@@ -114,6 +116,7 @@ function ord_get(PDO $pdo): void {
     }
 
     $orders = [];
+    $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Manila')))->format('Y-m-d');
     $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
             c.customer_id, c.full_name,
@@ -134,12 +137,16 @@ function ord_get(PDO $pdo): void {
             'payment' => $r['payment_status'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
             'balance' => (float) $r['balance_due'], 'archived' => $r['archived_at'] !== null,
-            'items' => [], 'materials' => [],
+            'items' => [], 'materials' => [], 'history'=>[],
+            'overdue'=>$r['due_date']!==null && $r['due_date']<$today && $r['production_status']!=='Cancelled' && !in_array($r['delivery_status'],['Delivered','Returned'],true) && $r['archived_at']===null,
         ];
     }
     if ($orders) {
         $ids = array_keys($orders);
         $in = implode(',', array_fill(0, count($ids), '?'));
+        $history=$pdo->prepare('SELECT order_id,status_type,old_status,new_status,changed_at FROM order_status_history WHERE order_id IN ('.$in.') ORDER BY changed_at,history_id');
+        $history->execute($ids);
+        foreach($history->fetchAll() as $h) $orders[(int)$h['order_id']]['history'][]=$h;
         $stmt = $pdo->prepare('SELECT oi.order_id, oi.product_id, p.product_name,
                 oi.quantity, oi.unit_price, oi.estimated_unit_cost
             FROM order_items oi JOIN products p ON p.product_id = oi.product_id
@@ -314,6 +321,7 @@ function ord_cancel(PDO $pdo, array $data): array {
     }
     $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled' WHERE order_id = ?");
     $stmt->execute([$orderId]);
+    $pdo->prepare("INSERT INTO order_status_history (order_id,status_type,old_status,new_status,notes) VALUES (?,'Production',?,'Cancelled','Cancelled from Orders')")->execute([$orderId,$status]);
     $pdo->commit();
     $message = $status === 'Pending'
         ? 'Order marked Cancelled in Production. Reserved materials were returned to inventory.'
