@@ -80,3 +80,5 @@ body.modal-open { overflow: hidden; }          /* page behind a pop-up doesn't s
   .stat strong,.summary strong { overflow-wrap:anywhere; }
   input[type=file] { max-width:100%; }
 }
+
+.photo-replace-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
