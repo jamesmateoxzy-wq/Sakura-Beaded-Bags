@@ -113,10 +113,9 @@
     if ($('slipDisclaimer')) $('slipDisclaimer').hidden = true;
   }
   function updateReference() {
-    const cash = $('paymentMethod').value === 'Cash';
-    $('referenceRequired').hidden = cash;
-    $('paymentReference').required = !cash;
-    $('paymentReference').placeholder = cash ? 'Optional cash receipt reference' : 'GCash / bank reference';
+    $('referenceRequired').hidden = false;
+    $('paymentReference').required = true;
+    $('paymentReference').placeholder = 'GCash / bank reference';
   }
   function validate() {
     const order = orderFor($('paymentOrder').value);
@@ -125,11 +124,11 @@
     if (!/^\d{1,9}(?:\.\d{1,2})?$/.test(amountText) || cents(amountText) < 1) throw new Error('Enter a positive payment amount with at most two decimals.');
     if (cents(amountText) > balance(order)) throw new Error('Payment exceeds the remaining balance of ' + peso(order.balance) + '.');
     const method = $('paymentMethod').value;
-    if (!['Cash','GCash','Bank Transfer'].includes(method)) throw new Error('Select a valid method.');
+    if (!['GCash','Bank Transfer'].includes(method)) throw new Error('Select a valid method.');
     const date = $('paymentDate').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today() || date < order.date) throw new Error('Payment date must be between order date and today.');
     const reference = $('paymentReference').value.trim();
-    if (method !== 'Cash' && !reference) throw new Error('GCash and bank transfers require a reference.');
+    if (!reference) throw new Error('GCash and bank transfers require a reference.');
     if (reference.length > 80) throw new Error('Reference must be 80 characters or fewer.');
     return {action:'record_payment', orderId:order.rawId, amount:amountText, method, date, reference, requestKey};
   }
