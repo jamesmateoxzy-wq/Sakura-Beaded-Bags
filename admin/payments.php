@@ -11,13 +11,22 @@
  *
  * Backend handoff: docs/PAYMENTS_SALES_HANDOFF.md
  */
+require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/config.php';
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
+$isDemo = USE_SAMPLE_DATA || (DEMO_MODE && ($_SESSION['user_id'] ?? '') === 'demo');
+
+$orders = [];
+$payments = [];
 
 $pageTitle = 'Payments & Sales';
 $pageSubtitle = 'A clear view of every payment and outstanding balance.';
 $activePage = 'payments';
 $pageCss = 'payments.css';
-$pageJs = 'payments.js';
+$pageJs = 'payments-live.js';
 
 require_once __DIR__ . '/../includes/header.php';
 ?>

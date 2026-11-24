@@ -8,7 +8,7 @@ $pageTitle = 'Financial Reports';
 $pageSubtitle = 'See how your boutique is growing, one bag at a time.';
 $activePage = 'reports';
 $pageCss = 'reports.css';
-$pageJs = 'reports.js';
+$pageJs = 'reports-live.js';
 $pageBodyClass = 'reports-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
@@ -39,7 +39,7 @@ require_once __DIR__ . '/../includes/header.php';
     <article class="card rep-stat">
       <div><span>Booked Sales</span><?= icon('wallet') ?></div>
       <strong id="repRevenue">₱0</strong>
-      <small id="repRevenueNote"></small>
+      <small id="repRevenueNote">No revenue recorded</small>
     </article>
     <article class="card rep-stat">
       <div><span>Estimated Costs</span><?= icon('payments') ?></div>
@@ -49,7 +49,7 @@ require_once __DIR__ . '/../includes/header.php';
     <article class="card rep-stat">
       <div><span>Estimated Gross Profit</span><?= icon('reports') ?></div>
       <strong id="repProfit">₱0</strong>
-      <small id="repProfitNote"></small>
+      <small id="repProfitNote">0.0% net profit margin</small>
     </article>
     <article class="card rep-stat">
       <div><span>Orders</span><?= icon('orders') ?></div>
@@ -60,8 +60,8 @@ require_once __DIR__ . '/../includes/header.php';
   <div class="rep-chart-grid">
     <section class="card rep-chart-card">
       <div class="rep-chart-heading">
-        <div><h2 id="repSalesTitle">Monthly Sales</h2><p id="repSalesSubtitle"></p></div>
-        <strong id="repSalesTrend"></strong>
+        <div><h2 id="repSalesTitle">Monthly Sales</h2><p id="repSalesSubtitle">No sales recorded</p></div>
+        <strong id="repSalesTrend">No trend yet</strong>
       </div>
       <div class="rep-chart" id="repBars" role="img" aria-label="Monthly sales chart"></div>
       <p class="rep-empty" id="repChartEmpty" hidden>No sales in this period.</p>
@@ -73,26 +73,26 @@ require_once __DIR__ . '/../includes/header.php';
         </div></div>
       </div>
       <div class="rep-chart" id="repComparison" role="img" aria-label="Monthly revenue and expenses chart"></div>
+      <p class="rep-empty" id="repComparisonEmpty" hidden>No revenue or expenses recorded.</p>
     </section>
   </div>
   <div class="rep-analysis-grid">
     <section class="card rep-analysis-card">
-      <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle"></p></div>
+      <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle">No financial activity recorded.</p></div>
       <table class="rep-analysis-table">
         <thead><tr><th>Category</th><th>Amount</th><th>Share of revenue</th></tr></thead>
         <tbody id="repExpensesTable"></tbody>
       </table>
-      <div class="rep-net-profit"><strong>Estimated Gross Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
+      <p class="rep-empty" id="repExpensesEmpty" hidden>No expense records for this period.</p>
+      <div class="rep-net-profit"><strong>Net Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
     </section>
     <section class="card rep-glance-card">
-      <p>Received for selected orders <strong id="repReceived">₱0</strong></p>
-      <p>Outstanding for selected orders <strong id="repBalance">₱0</strong></p>
-      <h2 id="repGlanceTitle"></h2>
-      <div class="rep-margin-row"><span>Estimated profit margin</span><strong id="repMargin"></strong></div>
+      <h2 id="repGlanceTitle">No activity yet</h2>
+      <div class="rep-margin-row"><span>Net profit margin</span><strong id="repMargin">0.0%</strong></div>
       <div class="rep-margin-track"><span id="repMarginBar"></span></div>
-      <p id="repGlanceText"></p>
-      <small id="repCalculation"></small>
-      <small id="repPrepared"></small>
+      <p id="repGlanceText">No sales or expenses recorded for this period.</p>
+      <small id="repCalculation">Revenue: ₱0 - Expenses: ₱0</small>
+      <small id="repPrepared">No report data yet · Currency: PHP (₱)</small>
     </section>
   </div>
 </section>

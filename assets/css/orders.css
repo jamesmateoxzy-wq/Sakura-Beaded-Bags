@@ -84,7 +84,7 @@
 .orders-layout .order-control .input,.orders-layout .order-control .select{padding-right:26px}
 .orders-layout .mini-edit{position:absolute;top:50%;right:5px;display:grid;width:17px;height:17px;transform:translateY(-50%);place-items:center;color:#8d7b80}
 .orders-layout .mini-edit .icon{width:9px;height:9px}
-.orders-layout .order-field-notes{grid-column:2/4}
+.orders-layout .order-field-notes{grid-column:1/4}
 .orders-layout .order-bom-head{display:flex;align-items:center;justify-content:space-between;margin:21px 0 6px}
 .orders-layout .order-bom-head h3{font-size:10px;font-weight:600}
 .orders-layout .order-add-material{height:22px;padding:0 8px;border:1px solid #f0e4e4;border-radius:5px;color:#d64f7e;font-size:7px}
@@ -203,6 +203,7 @@
 .orders-layout .order-create-modal{max-width:760px;height:min(680px,calc(100vh - 40px))}
 .orders-layout .order-material-modal{max-width:520px;height:auto;min-height:430px}
 .orders-layout .order-detail-modal{max-width:620px;height:auto;min-height:470px}
+.orders-layout .order-confirm-modal{max-width:480px;height:auto;max-height:calc(100vh - 40px)}
 .orders-layout .order-dialog-head{gap:14px;padding:20px 24px 8px}
 .orders-layout .order-dialog-head h2{font-size:20px}
 .orders-layout .order-dialog-head p{font-size:13px}
@@ -268,6 +269,15 @@
 .orders-layout .order-detail-body>.badge{min-width:0;font-size:11px}
 .orders-layout .order-detail-foot{padding-top:16px}
 .orders-layout .order-detail-foot .btn{min-height:40px;font-size:13px}
+.orders-layout .order-confirm-body{padding:12px 24px 18px}
+.orders-layout .order-confirm-message{color:#6b5960;font-size:14px;line-height:1.55}
+.orders-layout .order-confirm-transition{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:10px;background:#fdf0f3}
+.orders-layout .order-confirm-transition div{display:flex;min-width:0;flex-direction:column;gap:4px}
+.orders-layout .order-confirm-transition small{color:#9a858b;font-size:11px}
+.orders-layout .order-confirm-transition strong{overflow-wrap:anywhere;color:#6b5960;font-size:14px;font-weight:600}
+.orders-layout .order-confirm-transition>span{color:#d34f7c;font-size:18px}
+.orders-layout .order-confirm-note{margin-top:12px;padding:10px 12px;border-left:3px solid #d9668b;border-radius:4px;background:#fff8f4;color:#8a7479;font-size:12px;line-height:1.5}
+.orders-layout .order-confirm-foot{justify-content:flex-end}
 @media(max-width:700px){
   .orders-layout .content{padding:18px 16px 30px}
   .orders-current{padding:0}

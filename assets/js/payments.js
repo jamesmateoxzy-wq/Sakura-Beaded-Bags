@@ -36,7 +36,17 @@
       month: 'short', day: 'numeric', year: 'numeric'
     });
   }
-  var todayLocal = store.today;
+  function todayLocal() {
+    var d = new Date();
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
+  }
+  function validLocalDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    var parts = value.split('-').map(Number);
+    var date = new Date(parts[0], parts[1] - 1, parts[2]);
+    return date.getFullYear() === parts[0] && date.getMonth() === parts[1] - 1 &&
+      date.getDate() === parts[2];
+  }
   function orderFor(id) {
     return orders.filter(function (o) { return o.id === id; })[0] || null;
   }
@@ -50,8 +60,80 @@
     if (window.Sakura && Sakura.toast) Sakura.toast(message);
   }
 
+  function loadDemoOrders() {
+    if (!demo) return;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem('sakura-operations-v1') || '{}');
+      if (!stored || !Array.isArray(stored.orders)) return;
+      orders = stored.orders.filter(function (order) {
+        return order && typeof order.id === 'string' && /^ORD-\d+$/.test(order.id) &&
+          typeof order.customer === 'string' && Number.isFinite(Number(order.total)) &&
+          Number(order.total) >= 0;
+      });
+    } catch (error) {
+      notice('Could not read orders from this browser session.');
+    }
+  }
+
+  function syncOrderPayment(orderId, persist) {
+    var order = orderFor(orderId);
+    if (!order) return;
+    var paid = paidCents(orderId);
+    var total = cents(order.total);
+    order.payment = paid >= total && total > 0 ? 'Fully Paid' : paid > 0 ? 'Partial' : 'Unpaid';
+    order.deposit = toPesos(paid);
+    if (!persist) return;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem('sakura-operations-v1') || '{}');
+      if (!stored || !Array.isArray(stored.orders)) return;
+      var storedOrder = stored.orders.find(function (item) { return item.id === orderId; });
+      if (!storedOrder) return;
+      storedOrder.payment = order.payment;
+      storedOrder.deposit = order.deposit;
+      sessionStorage.setItem('sakura-operations-v1', JSON.stringify(stored));
+    } catch (error) {
+      notice('Payment saved, but the order payment status could not be updated.');
+    }
+  }
+
+  // Validate restored demo data so altered/stale browser storage cannot be
+  // treated as trusted records. Actual payment validation belongs on the server.
+  function loadDemoPayments() {
+    if (!demo) return;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
+      if (!Array.isArray(stored)) return;
+      var seen = {};
+      seed.forEach(function (p) { seen[p.id] = true; });
+      stored.slice(0, 200).forEach(function (p) {
+        if (!p || typeof p !== 'object' || typeof p.id !== 'string' ||
+            !/^SLP-\d+$/.test(p.id) || seen[p.id] || !orderFor(p.orderId) ||
+            !['Cash', 'GCash', 'Bank Transfer'].includes(p.method) ||
+            typeof p.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(p.date) ||
+            typeof p.reference !== 'string' || p.reference.length > 80 ||
+            !Number.isFinite(Number(p.amount)) || Number(p.amount) <= 0) return;
+
+        var o = orderFor(p.orderId);
+        var balance = balanceCents(o);
+        var amount = cents(p.amount);
+        if (amount <= 0 || amount > balance) return;
+        var clean = {
+          id: p.id, orderId: o.id, amount: toPesos(amount), method: p.method,
+          date: p.date, reference: p.reference, balanceAfter: toPesos(balance - amount)
+        };
+        seen[p.id] = true;
+        added.push(clean);
+        payments.push(clean);
+      });
+    } catch (err) {
+      // Session storage can be unavailable (e.g. strict private browsing).
+      added = [];
+    }
+  }
+
   function renderSummary() {
-    var sales = orders.reduce(function (sum, o) { return sum + cents(o.total); }, 0);
+    var sales = orders.filter(function (order) { return order.status !== 'Cancelled'; })
+      .reduce(function (sum, o) { return sum + cents(o.total); }, 0);
     var received = payments.reduce(function (sum, p) { return sum + cents(p.amount); }, 0);
     var outstanding = Math.max(0, sales - received);
     $('totalSales').textContent = peso(toPesos(sales));
@@ -100,6 +182,8 @@
         '</tr>';
     }).join('');
     $('paymentEmpty').hidden = filtered.length !== 0;
+    $('paymentEmpty').textContent = payments.length ?
+      'No transactions match your search or filters.' : 'No payment records yet.';
     $('paymentCount').textContent = filtered.length
       ? 'Showing ' + (from + 1) + '–' + Math.min(from + pageSize, filtered.length) +
         ' of ' + filtered.length + ' payments · All amounts in PHP'
@@ -129,7 +213,9 @@
     var select = $('paymentOrder');
     var previous = select.value;
     select.innerHTML = '';
-    var available = orders.filter(function (o) { return balanceCents(o) > 0; });
+    var available = orders.filter(function (o) {
+      return o.status !== 'Cancelled' && balanceCents(o) > 0;
+    });
     var placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = available.length ? 'Select unpaid order' : 'No unpaid orders available';
@@ -220,8 +306,8 @@
     if (!['Cash', 'GCash', 'Bank Transfer'].includes(method)) {
       return { error: 'Choose a valid payment method.' };
     }
-    if (!store.validDate(date) || date > todayLocal() || date < order.date) {
-      return { error: 'Choose a payment date between the order date and today.' };
+    if (!validLocalDate(date) || date > todayLocal()) {
+      return { error: 'Choose a valid payment date that is not in the future.' };
     }
     if (method !== 'Cash' && !ref) return { error: 'Enter the GCash or bank reference number.' };
     if (ref.length > 80) return { error: 'Reference is limited to 80 characters.' };
@@ -266,6 +352,13 @@
         return;
       }
       payments.push(entry);
+      var stored = true;
+      try {
+        sessionStorage.setItem(storageKey, JSON.stringify(added));
+      } catch (storageError) {
+        stored = false;
+      }
+      syncOrderPayment(entry.orderId, stored);
       $('recordPaymentForm').reset();
       $('paymentDate').value = todayLocal();
       $('paymentMethod').value = 'GCash';
@@ -286,6 +379,13 @@
   }
 
   function init() {
+    if (!demo) {
+      seed = [];
+      payments = [];
+    } else {
+      loadDemoOrders();
+      loadDemoPayments();
+    }
     $('paymentDate').max = todayLocal();
     $('paymentDate').value = todayLocal();
     $('paymentSearch').addEventListener('input', function () { page = 1; renderTransactions(); });

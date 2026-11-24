@@ -4,15 +4,51 @@
   var root = document.getElementById('operationsPage');
   if (!root || root.dataset.module !== 'inventory') return;
   var $ = function (id) { return document.getElementById(id); };
-  var store = window.SakuraStore;
-  var data = store.read();
-  var materials = data.materials;
-  var history = data.inventoryHistory;
-
+  var key = 'sakura-operations-v1';
+  var storageUnavailable = false;
+  var storageFailureReported = false;
   function materialValue(list) {
-    return list.reduce((sum, material) => sum + store.cents(material.stock * material.cost), 0) / 100;
+    return list.reduce(function (sum, material) {
+      return sum + Number(material.stock || 0) * Number(material.cost || 0);
+    }, 0);
   }
-
+  function reportStorageFailure() {
+    if (storageFailureReported) return;
+    storageFailureReported = true;
+    notify('Could not read or save demo inventory changes in this browser session.');
+  }
+  function load() {
+    if (!demo) return { materials:[], history:[], stockInCount:0 };
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(key) || '{}');
+      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+      return {
+        materials:Array.isArray(stored.materials) ? stored.materials : [],
+        history:Array.isArray(stored.inventoryHistory) ? stored.inventoryHistory : [],
+        stockInCount:Number.isInteger(stored.inventoryStockInCount) ? stored.inventoryStockInCount : 0
+      };
+    } catch (error) {
+      storageUnavailable = true;
+      reportStorageFailure();
+      return { materials:[], history:[], stockInCount:0 };
+    }
+  }
+  function save() {
+    if (!demo || storageUnavailable) return false;
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(key) || '{}');
+      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) stored = {};
+      stored.materials = materials;
+      stored.inventoryHistory = history;
+      stored.inventoryStockInCount = stockInCount;
+      sessionStorage.setItem(key, JSON.stringify(stored));
+      return true;
+    } catch (error) {
+      storageUnavailable = true;
+      reportStorageFailure();
+      return false;
+    }
+  }
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
@@ -43,6 +79,26 @@
     if (Number.isNaN(parsed.getTime())) return value;
     return parsed.toLocaleDateString('en-US', {month:'short', day:'numeric'});
   }
+  function inputDate(value) {
+    var parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.getFullYear() + '-' + String(parsed.getMonth() + 1).padStart(2, '0') + '-' +
+      String(parsed.getDate()).padStart(2, '0');
+  }
+  function appendHistory(material, activity, delta, date) {
+    history.unshift({
+      material:material.name,
+      date:date,
+      activity:activity,
+      delta:delta,
+      unit:material.unit
+    });
+  }
+
+  var loaded = load();
+  var materials = loaded.materials;
+  var history = loaded.history;
+  var stockInCount = loaded.stockInCount;
   var historyExpanded = false;
 
   function updateMaterialOptions(select, selectedId) {
@@ -50,6 +106,10 @@
     select.innerHTML = materials.map(function (material) {
       return '<option value="' + esc(material.id) + '">' + esc(material.name) + ' · ' + esc(material.id) + '</option>';
     }).join('');
+    if (!materials.length) {
+      select.innerHTML = '<option value="">No registered materials available</option>';
+      return;
+    }
     if (materials.some(function (material) { return material.id === currentId; })) select.value = currentId;
   }
   function updateHistory() {
@@ -61,6 +121,9 @@
         '</strong><small>' + esc(formatDate(entry.date)) + ' · ' + esc(entry.activity) +
         '</small></div><span class="inv-history-quantity ' + quantityClass + '">' + quantity + '</span></li>';
     }).join('');
+    $('invHistoryEmpty').hidden = history.length > 0;
+    $('invHistoryRows').hidden = history.length === 0;
+    $('invHistoryToggle').hidden = history.length <= 3;
     $('invHistoryToggle').innerHTML = historyExpanded ? 'Show less <span aria-hidden="true">↑</span>' :
       'View all <span aria-hidden="true">→</span>';
   }
@@ -69,6 +132,8 @@
     $('invLowAlerts').innerHTML = low.map(function (material) {
       return '<li>' + esc(material.name) + ' · ' + material.stock + ' / ' + material.min + ' ' + esc(material.unit) + '</li>';
     }).join('');
+    $('invAlertsEmpty').hidden = low.length > 0;
+    $('invLowAlerts').hidden = low.length === 0;
   }
   function render() {
     var query = $('invSearch').value.trim().toLowerCase();
@@ -76,13 +141,9 @@
       return !query || (material.id + ' ' + material.name).toLowerCase().includes(query);
     });
     $('invTotal').textContent = materials.length;
-    $('invOpenStockIn').disabled = !materials.length;
-    $('invOpenCorrection').disabled = !materials.length;
     $('invLow').textContent = materials.filter(function (material) { return material.stock <= material.min; }).length;
-    $('invValue').textContent = money(materialValue(materials));
-    const month = store.today().slice(0, 7);
-    $('invStockInCount').textContent = history.filter(entry => entry.activity === 'Stock-In' &&
-      entry.date.startsWith(month)).length;
+    $('invValue').textContent = moneyWhole(materialValue(materials));
+    $('invStockInCount').textContent = stockInCount;
     $('invRows').innerHTML = shown.map(function (material) {
       return '<tr><td>' + esc(material.id) + '</td><td>' + esc(material.name) + '</td><td>' +
         esc(material.unit) + '</td><td>' + money(material.cost) + '</td><td>' + material.stock +
@@ -93,13 +154,22 @@
     updateMaterialOptions($('invAdjustId'), $('invAdjustId').value);
     updateHistory();
     updateLowStockAlerts();
+    $('invOpenStockIn').disabled = !demo;
+    $('invOpenCorrection').disabled = !demo || materials.length === 0;
   }
   function getMaterial(id) {
     return materials.find(function (material) { return material.id === id; });
   }
   function updateStockInSummary() {
     var material = getMaterial($('invStockInMaterial').value);
-    if (!material) return;
+    if (!material) {
+      $('invCurrentBalance').textContent = '0';
+      $('invStockInUnit').textContent = 'pcs';
+      $('invStockInMath').textContent = 'No registered materials';
+      $('invStockInNewBalance').textContent = 'New balance: —';
+      $('invStockInValue').textContent = 'Value: ₱0.00';
+      return;
+    }
     var quantity = Number($('invStockInQty').value);
     var cost = Number($('invStockInCost').value);
     var current = Number(material.stock);
@@ -122,15 +192,18 @@
     showError('invStockInError', '');
     updateMaterialOptions($('invStockInMaterial'), materials[0] && materials[0].id);
     var material = materials[0];
-    $('invStockInQty').value = '';
+    $('invStockInQty').value = '1';
     $('invStockInCost').value = material ? Number(material.cost).toFixed(2) : '0.00';
-    $('invStockInDate').value = store.today();
-    $('invStockInDate').max = store.today();
+    $('invStockInDate').value = new Date().toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
     updateStockInSummary();
     openModal('invStockInModal');
   }
   function openCorrection() {
-    if (!materials.length) { notify('Register a material in Product Costing & Pricing first.'); return; }
+    if (!demo) return;
+    if (!materials.length) {
+      notify('Add a material before recording a stock correction.');
+      return;
+    }
     $('invAdjustForm').reset();
     showError('invAdjustError', '');
     updateMaterialOptions($('invAdjustId'), materials[0] && materials[0].id);
@@ -139,6 +212,52 @@
   }
 
   $('invSearch').addEventListener('input', render);
+  $('invOpenCreate').addEventListener('click', function () {
+    if (!demo) return;
+    $('invCreateForm').reset();
+    showError('invCreateError', '');
+    openModal('invCreateModal');
+  });
+  $('invCreateForm').addEventListener('submit', function (event) {
+    event.preventDefault();
+    if (!demo) return;
+    var name = $('invCreateName').value.trim();
+    var unit = $('invCreateUnit').value;
+    var cost = Number($('invCreateCost').value);
+    var stock = Number($('invCreateStock').value);
+    var min = Number($('invCreateMin').value);
+    if (!name || name.length > 80 || materials.some(function (material) {
+      return material.name.toLowerCase() === name.toLowerCase();
+    }) || ['pcs','roll','pack','meter','set'].indexOf(unit) === -1 ||
+        !Number.isFinite(cost) || cost < 0 || cost > 1000000 ||
+        !Number.isInteger(stock) || stock < 0 || stock > 1000000 ||
+        !Number.isInteger(min) || min < 0 || min > 1000000) {
+      showError('invCreateError', 'Enter a unique material name, unit cost, quantity and reorder level within the allowed limits.');
+      return;
+    }
+    var nextNumber = materials.reduce(function (max, material) {
+      return Math.max(max, Number(String(material.id).replace(/^MAT-/, '')) || 0);
+    }, 0) + 1;
+    var material = {
+      id:'MAT-' + String(nextNumber).padStart(3, '0'),
+      name:name,
+      unit:unit,
+      cost:cost,
+      stock:stock,
+      min:min
+    };
+    materials.push(material);
+    if (stock > 0) appendHistory(material, 'Opening balance', stock, new Date().toISOString().slice(0, 10));
+    if (!save()) {
+      materials.pop();
+      if (stock > 0) history.shift();
+      showError('invCreateError', 'Could not save this material. Your changes were discarded.');
+      return;
+    }
+    closeModal('invCreateModal');
+    render();
+    notify(material.name + ' added to inventory.');
+  });
   $('invHistoryToggle').addEventListener('click', function () {
     if (history.length <= 3) {
       notify('All available inventory history is shown.');

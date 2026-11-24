@@ -7,8 +7,8 @@
   var inventory = data.materials;
   var categories = data.categories;
   var IMG_PATH = '../assets/images/products/';
-
-  var selectedId = products.length ? products[0].id : null;
+  var inventoryKey = 'sakura-operations-v1';
+  var selectedId;
   var draft = null;       // the copy being edited in the costing sheet
   var newDraft = null;    // the product being built in the Add Product modal
   var amOnAdd = null;     // what to do when "Add" is pressed in the Add Material modal
@@ -20,8 +20,39 @@
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function money(n) { return Math.round(n * 100) % 100 === 0 ? S.peso(n, 0) : S.peso(n, 2); }
   function findProduct(id) { return products.filter(function (p) { return p.id === id; })[0]; }
+  function loadSavedProducts() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (stored && Array.isArray(stored.products)) products = stored.products;
+    } catch (error) {
+      S.toast('Could not load saved products from this browser session.');
+    }
+  }
+  function saveProducts() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (!stored || typeof stored !== 'object' || Array.isArray(stored)) {
+        S.toast('Could not save products: browser session data is invalid.');
+        return false;
+      }
+      stored.products = products;
+      sessionStorage.setItem(inventoryKey, JSON.stringify(stored));
+      return true;
+    } catch (error) {
+      S.toast('Could not save products in this browser session.');
+      return false;
+    }
+  }
+  loadSavedProducts();
+  selectedId = products.length ? products[0].id : null;
 
-  var calc = store.costing;
+  function calc(p) {
+    var mat = p.materials.reduce(function (s, m) { return s + m.qty * m.cost; }, 0);
+    var cost = mat + num(p.labor) + num(p.packaging);
+    var price = cost * (1 + num(p.markup) / 100);
+    var profit = price - cost;
+    return { materials: mat, cost: cost, price: price, profit: profit, margin: price ? profit / price * 100 : 0 };
+  }
 
   function thumbHtml(p, extra) {
     var initial = esc((p.name || '?').charAt(0).toUpperCase());
@@ -179,12 +210,13 @@
   }
 
   $('sSave').addEventListener('click', function () {
-    if (!validProduct(draft, 's')) return;
-    var index = products.indexOf(findProduct(selectedId));
-    var previous = products[index];
-    products[index] = clone(draft);
-    if (!store.save(data)) {
-      products[index] = previous;
+    if (!draft.name.trim()) { $('sName').classList.add('is-error'); S.toast('Enter a product name first.'); return; }
+    $('sName').classList.remove('is-error');
+    var i = products.indexOf(findProduct(selectedId));
+    var previous = products[i];
+    products[i] = clone(draft);
+    if (!saveProducts()) {
+      products[i] = previous;
       return;
     }
     renderList();
@@ -244,6 +276,15 @@
   // ---------- Add Material modal ----------
   function inv() { return inventory[$('amMaterial').selectedIndex] || inventory[0]; }
 
+  function refreshInventory() {
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(inventoryKey) || '{}');
+      if (stored && Array.isArray(stored.materials)) inventory = stored.materials;
+    } catch (error) {
+      S.toast('Could not load inventory materials from this browser session.');
+    }
+  }
+
   function updateAmount() {
     var m = inv(), qty = num($('amQty').value), cost = num($('amCost').value);
     $('amAmount').textContent = money(store.cents(qty * cost) / 100);
@@ -258,6 +299,7 @@
 
   function openAddMaterial(context, onAdd) {
     amOnAdd = onAdd;
+    refreshInventory();
     $('amContext').textContent = context;
     renderMaterialChoices();
     $('amQty').value = 1;
@@ -391,9 +433,8 @@
     const previousId = data.lastProductId;
     data.lastProductId = next;
     products.push(item);
-    if (!store.save(data)) {
+    if (!saveProducts()) {
       products.pop();
-      data.lastProductId = previousId;
       return;
     }
     $('categoryFilter').value = 'all';

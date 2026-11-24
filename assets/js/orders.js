@@ -5,14 +5,76 @@
   if (!root || root.dataset.module !== 'orders') return;
 
   var $ = function (id) { return document.getElementById(id); };
-  var store = window.SakuraStore;
-  var data = store.read();
-  var orders = data.orders;
-  var products = data.products;
-  var materials = data.materials;
-
+  var key = 'sakura-operations-v1';
+  var storageUnavailable = false;
+  var storageFailureReported = false;
+  var products = [
+    { id:'heart', name:'Heart Bag', price:1200, labor:200, packaging:50, materials:[] },
+    { id:'pink', name:'Pink Bag', price:850, labor:150, packaging:50, materials:[] },
+    { id:'pearl', name:'Pearl Tote', price:1500, labor:250, packaging:50, materials:[] }
+  ];
   function clone(value) { return JSON.parse(JSON.stringify(value)); }
-
+  function loadStore() {
+    try { return JSON.parse(sessionStorage.getItem(key) || '{}'); }
+    catch (error) {
+      storageUnavailable = true;
+      reportStorageFailure();
+      return {};
+    }
+  }
+  function loadOrders() {
+    if (!demo) return [];
+    var stored = loadStore();
+    return Array.isArray(stored.orders) ? stored.orders : [];
+  }
+  function loadMaterials() {
+    if (!demo) return [];
+    var stored = loadStore();
+    return Array.isArray(stored.materials) ? stored.materials : [];
+  }
+  function loadProductCatalog() {
+    if (!demo) return;
+    var stored = loadStore();
+    if (!Array.isArray(stored.products)) return;
+    stored.products.forEach(function (product) {
+      if (!product || !product.name) return;
+      var materials = Array.isArray(product.materials) ? product.materials : [];
+      var labor = Number(product.labor) || 0;
+      var packaging = Number(product.packaging) || 0;
+      var materialCost = materials.reduce(function (sum, material) {
+        return sum + (Number(material.qty) || 0) * (Number(material.cost) || 0);
+      }, 0);
+      var price = (materialCost + labor + packaging) * (1 + (Number(product.markup) || 0) / 100);
+      var catalogProduct = {
+        id:'catalog-' + String(product.id),
+        name:String(product.name),
+        price:price,
+        labor:labor,
+        packaging:packaging,
+        materials:clone(materials)
+      };
+      var existingIndex = products.findIndex(function (existing) {
+        return existing.name.toLowerCase() === catalogProduct.name.toLowerCase();
+      });
+      if (existingIndex === -1) products.push(catalogProduct);
+      else products[existingIndex] = Object.assign({}, products[existingIndex], catalogProduct, {id:products[existingIndex].id});
+    });
+  }
+  function save() {
+    if (!demo) return false;
+    if (storageUnavailable) return false;
+    try {
+      var stored = loadStore();
+      if (storageUnavailable) return false;
+      stored.orders = orders;
+      sessionStorage.setItem(key, JSON.stringify(stored));
+      return true;
+    } catch (error) {
+      storageUnavailable = true;
+      reportStorageFailure();
+      return false;
+    }
+  }
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
@@ -53,10 +115,17 @@
   function orderId(number) { return 'ORD-' + String(number).padStart(3, '0'); }
   function cloneBom(items) { return clone(items || []); }
 
+  loadProductCatalog();
+  var orders = loadOrders();
+  var materials = loadMaterials();
   var activeGroup = 'all';
-  var activeOrderId = 'ORD-001';
+  var activeOrderId = '';
   var currentBom = [];
   var detailOrder = null;
+
+  function refreshMaterials() {
+    materials = loadMaterials();
+  }
 
   function cardMarkup(order, index) {
     return '<article class="order-card' + (order.id === activeOrderId ? ' is-highlighted' : '') + '" data-view="' + esc(order.id) + '" tabindex="0" role="button" aria-label="View order ' + esc(order.id) + '">' +
@@ -80,7 +149,9 @@
     }).sort(function (a, b) { return a.id.localeCompare(b.id); });
 
     $('ordTotal').textContent = orders.length;
-    $('ordProduction').textContent = orders.filter(order => order.status === 'Pending' || order.status === 'In Progress').length;
+    $('ordProduction').textContent = orders.filter(function (o) {
+      return !o.archived && (o.status === 'Pending' || o.status === 'In Progress');
+    }).length;
     $('ordRows').innerHTML = shown.map(function (order) {
       return '<tr data-view="' + esc(order.id) + '"><td>' + esc(order.id) + '</td><td>' + dateText(order.date) +
         '</td><td>' + esc(order.customer) + '</td><td>' + esc(order.product) + ' ×' + order.qty +
@@ -88,6 +159,8 @@
         '</td><td>' + badge(order.delivery || 'Pending') + '</td><td>' + badge(paymentStatus(order)) + '</td></tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
+    $('ordEmpty').textContent = orders.length ?
+      'No orders match your search and filters.' : 'No orders yet. Create a new order to get started.';
     var currentOrders = orders.filter(function (order) {
       return !order.archived && (order.status === 'Pending' || order.status === 'In Progress');
     }).sort(function (a, b) { return a.date.localeCompare(b.date) || b.id.localeCompare(a.id); }).slice(0, 3);
@@ -127,8 +200,16 @@
   function resetCreateForm() {
     $('ordCreateForm').reset();
     $('ordId').value = orderId(nextOrderNumber());
-    $('ordDueDate').min = store.today();
-    $('ordDueDate').value = store.today();
+    $('ordCustomer').value = '';
+    $('ordAddress').value = '';
+    $('ordProduct').value = 'heart';
+    $('ordQty').value = '1';
+    $('ordDueDate').value = '';
+    $('ordNotes').value = '';
+    $('ordLabor').value = '0';
+    $('ordPackaging').value = '0';
+    $('ordDpPolicy').value = '50';
+    currentBom = [];
     $('ordCreateError').hidden = true;
     loadProduct();
   }
@@ -211,10 +292,36 @@
     openModal('ordCreateModal');
   });
   document.querySelectorAll('[data-focus]').forEach(function (button) {
-    button.addEventListener('click', function () { $(button.dataset.focus).focus(); });
+    button.addEventListener('click', function () {
+      var field = $(button.dataset.focus);
+      field.focus();
+      if (field.tagName === 'SELECT' && typeof field.showPicker === 'function') {
+        try { field.showPicker(); } catch (error) {}
+      }
+    });
   });
-  $('ordProduct').addEventListener('change', loadProduct);
-  ['ordQty', 'ordDpPolicy'].forEach(id => $(id).addEventListener('input', renderBom));
+  $('ordProduct').addEventListener('change', function () {
+    var product = selectedProduct();
+    currentBom = cloneBom(product.materials);
+    $('ordLabor').value = product.labor;
+    $('ordPackaging').value = product.packaging;
+    renderBom();
+  });
+  ['ordQty', 'ordLabor', 'ordPackaging', 'ordDpPolicy'].forEach(function (id) {
+    $(id).addEventListener('input', renderBom);
+  });
+  $('ordBomRows').addEventListener('click', function (event) {
+    var button = event.target.closest('[data-remove-material]');
+    if (!button) return;
+    currentBom.splice(Number(button.dataset.removeMaterial), 1);
+    renderBom();
+  });
+  $('ordMaterialSelect').addEventListener('change', function () {
+    $('ordMaterialQty').value = '1';
+    updateMaterialDialog();
+  });
+  $('ordMaterialQty').addEventListener('input', updateMaterialDialog);
+  $('ordMaterialAdd').addEventListener('click', addMaterialToOrder);
   $('ordCreateForm').addEventListener('submit', function (event) {
     event.preventDefault();
     var customer = $('ordCustomer').value.trim();
@@ -246,15 +353,16 @@
         'A material is missing. Update the product recipe in Product Costing & Pricing.');
       return;
     }
-    const previousStocks = allocations.map(entry => entry.material.stock);
-    allocations.forEach(entry => store.movement(data, entry.material, id + ' reserved', -entry.qty));
+    var number = nextOrderNumber();
+    var unitPrice = Number(product.price);
+    var total = unitPrice * qty;
     orders.push({
-      id, customerId:'CUST-' + String(number).padStart(3,'0'), customer, address,
-      productId:product.id, product:product.name, qty, unitPrice, total,
-      date:store.today(), dueDate, status:'Pending', delivery:'Pending',
-      requiredDeposit:Math.round(store.cents(total) * policy / 100) / 100,
-      notes:$('ordNotes').value.trim(), labor:product.labor, packaging:product.packaging,
-      materials:cloneBom(currentBom), stockReserved:true
+      id:orderId(number), customerId:'CUST-' + String(number).padStart(3,'0'), slipId:'SLP-' + String(number).padStart(3,'0'),
+      customer:customer, address:address, product:product.name, qty:qty, unitPrice:unitPrice, total:total,
+      date:dateValue(new Date()), dueDate:dueDate, status:'Pending', delivery:'Pending',
+      payment:'Unpaid', deposit:0, notes:$('ordNotes').value.trim(), labor:Number($('ordLabor').value) || 0,
+      packaging:Number($('ordPackaging').value) || 0, dpPolicy:Number($('ordDpPolicy').value) || 0,
+      materials:cloneBom(currentBom)
     });
     if (!store.save(data)) {
       orders.pop();

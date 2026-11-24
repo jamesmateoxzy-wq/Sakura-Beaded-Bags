@@ -86,3 +86,21 @@ window.Sakura = (function () {
 
   return { peso: peso, toast: toast, openModal: openModal, closeModal: closeModal };
 })();
+
+(function clearLegacyDemoData() {
+  var operationsPage = document.getElementById('operationsPage');
+  var paymentData = window.SAKURA_PAYMENT_DATA;
+  var isDemo = (operationsPage && operationsPage.dataset.demo === '1') ||
+    (paymentData && paymentData.demo === true);
+  if (!isDemo) return;
+
+  var resetKey = 'sakura-demo-data-cleared-v2';
+  try {
+    if (sessionStorage.getItem(resetKey) === '1') return;
+    sessionStorage.clear();
+    sessionStorage.setItem(resetKey, '1');
+  } catch (error) {
+    console.error('Could not clear previous demo records from this browser session.', error);
+    window.Sakura.toast('Could not clear previous demo records from this browser session.');
+  }
+})();
