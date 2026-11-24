@@ -57,6 +57,11 @@
       ['In Production','Ready','For Delivery','In Transit','Shipped','Partial'].includes(s) ? 'badge-blue' : 'badge-pink';
   }
   function badge(s) { return '<span class="badge ' + badgeClass(s) + '">' + esc(s) + '</span>'; }
+  function paymentLabel(o) {
+    if(Number(o.refundedAmount)>0) return Number(o.paid)===0 ? 'Refunded' : o.payment + ' · Refund recorded';
+    return o.payment;
+  }
+  function paymentBadge(o) { return badge(paymentLabel(o)); }
   function product() {
     return products.find(function (p) { return String(p.id) === $('ordProduct').value; }) || null;
   }
@@ -144,8 +149,8 @@
     return Boolean(o.archived);
   }
   function currentProduction(o) {
-    return !archived(o) && o.delivery !== 'Delivered' &&
-      ['Pending','In Production','Ready','Completed','Cancelled'].includes(o.status);
+    return !archived(o) && !['Delivered','Returned'].includes(o.delivery) &&
+      ['Pending','In Production','Ready','Completed'].includes(o.status);
   }
   function itemSummary(o) {
     return (o.items || []).map(function (v) { return v.product + ' ×' + v.qty; }).join(', ') || 'No items';
@@ -171,7 +176,7 @@
     $('ordRows').innerHTML = shown.map(function (o) {
       return '<tr' + (' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
-        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + (o.overdue ? ' <span class="badge badge-pink">Overdue</span>' : '') + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
+        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + (o.overdue ? ' <span class="badge badge-pink">Overdue</span>' : '') + '</td><td>' + paymentBadge(o) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
@@ -182,7 +187,7 @@
         '<div class="order-card-top"><span class="order-number">' + formatId(i+1) + '</span><span>' + esc(o.id) + '</span></div>' +
         '<h3>' + esc(o.customer) + '</h3><div class="order-card-product"><span>' + esc(itemSummary(o)) +
         '</span><strong>' + money(o.total) + '</strong></div><p class="order-card-due">Due ' + dateText(o.dueDate || o.date) + (o.overdue ? ' · Overdue' : '') + '</p>' +
-        '<div class="order-card-badges">' + badge(o.status) + badge(o.payment) + '</div>' +
+        '<div class="order-card-badges">' + badge(o.status) + paymentBadge(o) + '</div>' +
         '<span class="order-card-link">Click to view details →</span></article>';
     }).join('');
     document.querySelectorAll('.orders-tab').forEach(function (tab) {
@@ -211,8 +216,10 @@
     $('ordDetailTotal').textContent = money(o.total);
     $('ordDetailProduction').textContent = o.status;
     $('ordDetailProduction').className = 'badge ' + badgeClass(o.status);
-    $('ordDetailPayment').textContent = o.payment;
-    $('ordDetailPayment').className = 'badge ' + badgeClass(o.payment);
+    $('ordDetailPayment').textContent = paymentLabel(o);
+    $('ordDetailPayment').className = 'badge ' + badgeClass(paymentLabel(o));
+    $('ordRefundInfo').hidden = !(Number(o.refundedAmount)>0);
+    $('ordRefundInfo').textContent = Number(o.refundedAmount)>0 ? 'Refunded: '+money(o.refundedAmount)+' · Remaining paid: '+money(o.paid)+' · Outstanding: '+money(o.balance) : '';
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
     $('ordDetailDelivery').textContent = deliveryLabel(o.delivery);
@@ -271,7 +278,7 @@
       (isCancel ? 'Cancelled' : isShip ? 'Shipped' : isDelivery ? 'Delivered' :
         (action === 'Start Production' ? 'In Production' : 'Completed'));
     if (isCancel) {
-      $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will remain in Production with the status Cancelled until archived.';
+      $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will leave the production queue and remain in All orders for reference until archived.';
     } else if (isArchive) {
       $('ordStatusConfirmMessage').textContent = 'Move this order to the Archived tab? It will remain saved for history.';
     } else {
@@ -340,7 +347,7 @@
         $('ordSearch').value = '';
         $('ordFilter').value = 'all';
       } else if (action === 'Cancel Order') {
-        activeGroup = 'production';
+        activeGroup = 'all';
         $('ordSearch').value = '';
         $('ordFilter').value = 'all';
       }
@@ -489,7 +496,7 @@
   });
   if ($('ordExport')) $('ordExport').addEventListener('click', function () {
     var rows = [['Order ID','Date','Customer','Product','Total PHP','Production','Delivery','Payment']].concat(
-      orders.map(function (o) { return [o.id,o.date,o.customer,itemSummary(o),o.total,o.status,o.delivery,o.payment]; }));
+      orders.map(function (o) { return [o.id,o.date,o.customer,itemSummary(o),o.total,o.status,o.delivery,paymentLabel(o)]; }));
     var csv = '\ufeff' + rows.map(function (row) {
       return row.map(function (value) { return '"' + String(value).replace(/"/g,'""') + '"'; }).join(',');
     }).join('\r\n');
