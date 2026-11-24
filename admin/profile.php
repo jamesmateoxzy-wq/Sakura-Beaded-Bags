@@ -7,6 +7,31 @@
  * remove the data-demo attribute from the <form> so it posts for real.
  */
 require_once __DIR__ . '/../includes/functions.php';
+require_once __DIR__ . '/../includes/final_features.php';
+sbb_admin_guard();
+$notice = ''; $error = '';
+try {
+    $db = sbb_db();
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        sbb_check_token();
+        $name = sbb_text($_POST['full_name'] ?? null,80,true);
+        $phone = sbb_phone($_POST['phone'] ?? '');
+        $db->beginTransaction();
+        $db->prepare('INSERT INTO sbb_admin_profiles (google_sub,display_name,phone) VALUES (?,?,?) ON DUPLICATE KEY UPDATE display_name=VALUES(display_name),phone=VALUES(phone)')->execute([$_SESSION['user_id'],$name,$phone]);
+        sbb_activity($db,'Updated personal profile');
+        $db->commit();
+        $_SESSION['user_name']=$name; $_SESSION['user_phone']=$phone;
+        header('Location: profile.php?saved=1'); exit;
+    }
+    $stmt=$db->prepare('SELECT display_name,phone FROM sbb_admin_profiles WHERE google_sub=?');
+    $stmt->execute([$_SESSION['user_id']]);
+    if ($profile=$stmt->fetch()) { $_SESSION['user_name']=$profile['display_name']; $_SESSION['user_phone']=$profile['phone']; }
+    if (isset($_GET['saved'])) $notice='Profile saved.';
+} catch (Throwable $e) {
+    if (isset($db) && $db->inTransaction()) $db->rollBack();
+    error_log('SBB profile: '.$e->getMessage());
+    $error=$e instanceof InvalidArgumentException ? $e->getMessage() : 'Profile could not be loaded or saved. Check the final improvements migration and server logs.';
+}
 
 $pageTitle    = 'My Profile';
 $pageSubtitle = 'Your account details.';
@@ -17,10 +42,12 @@ require_once __DIR__ . '/../includes/header.php';   // also defines $userName, $
 
 $userEmail = $_SESSION['user_email'] ?? '';
 $picture   = $_SESSION['user_picture'] ?? '';
-$phone     = $_SESSION['user_phone'] ?? '';          // TODO (backend): load from the users table
+$phone     = $_SESSION['user_phone'] ?? '';         
 $signIn    = $userEmail ? 'Google' : 'Demo mode';
 ?>
 
+<?php if ($notice): ?><p role="status" class="note"><?= e($notice) ?></p><?php endif; ?>
+<?php if ($error): ?><p role="alert" class="note"><?= e($error) ?></p><?php endif; ?>
 <div class="account-grid">
 
   <!-- ===== Summary card ===== -->
@@ -51,7 +78,7 @@ $signIn    = $userEmail ? 'Google' : 'Demo mode';
       </div>
     </div>
 
-    <form method="post" action="profile.php" data-demo>
+    <form method="post" action="profile.php"><input type="hidden" name="csrf" value="<?= e(sbb_form_token()) ?>">
       <div class="form-row">
         <div class="field">
           <label for="fullName">Full name <span class="req">*</span></label>
