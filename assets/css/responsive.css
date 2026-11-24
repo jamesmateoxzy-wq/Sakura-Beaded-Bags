@@ -59,3 +59,24 @@ body.modal-open { overflow: hidden; }          /* page behind a pop-up doesn't s
   /* toast messages span the bottom */
   .toast-wrap { left: 14px; right: 14px; bottom: 14px; }
 }
+
+/* Final improvements: keep account and reporting content readable. */
+.final-table-scroll { overflow-x:auto; max-width:100%; }
+.final-table { border-collapse:collapse; width:100%; min-width:520px; }
+.final-table th,.final-table td { text-align:left; padding:12px; border-bottom:1px solid #e9dce4; overflow-wrap:anywhere; }
+.final-business { display:flex; flex-direction:column; gap:4px; margin:0 0 12px; overflow-wrap:anywhere; }
+.final-overdue { margin-bottom:16px; border-left:4px solid #be5479; }
+.final-history { margin-top:16px; }
+.final-history ul { padding-left:20px; overflow-wrap:anywhere; }
+.final-history li { margin:6px 0; }
+@media(max-width:600px){
+  .main,.content,.card,.prod-detail,.field,.topbar-title { min-width:0; }
+  .topbar-title h1 { overflow-wrap:anywhere; }
+  .form-row,.form-row.three,.account-grid { grid-template-columns:minmax(0,1fr); }
+  .form-actions,.sheet-foot .actions,.rep-actions,.prod-toolbar { flex-wrap:wrap; }
+  .table-wrap,.final-table-scroll { overflow-x:auto; max-width:100%; }
+  .modal-body { overflow-y:auto; min-height:0; }
+  .modal-foot > div { display:flex; flex-wrap:wrap; gap:8px; }
+  .stat strong,.summary strong { overflow-wrap:anywhere; }
+  input[type=file] { max-width:100%; }
+}
