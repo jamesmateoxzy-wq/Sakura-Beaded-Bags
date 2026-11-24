@@ -301,7 +301,7 @@ try {
         }
         $total = $materialTotal + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'];
         $price = round($total * (1 + (float) $product['markup_percent'] / 100), 2);
-        if ($total <= 0 || !is_finite($price) || $price > 100000000) {
+        if ($total <= 0 || $price <= 0 || !is_finite($price) || $price > 100000000) {
             throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
         }
 
@@ -336,9 +336,13 @@ try {
     $productId = $action === 'save_pricing' ? prod_positive_id($body['id'] ?? null, 'product') : null;
 
     $pdo->beginTransaction();
-    $categoryStmt = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_id = ?');
+    $categoryStmt = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_id = ? FOR UPDATE');
     $categoryStmt->execute([$categoryId]);
     if ($categoryStmt->fetchColumn() === false) throw new InvalidArgumentException('Category was not found. Refresh and retry.');
+
+    $duplicate = $pdo->prepare('SELECT product_id FROM products WHERE category_id = ? AND is_active = 1 AND LOWER(TRIM(product_name)) = LOWER(TRIM(?)) AND product_id <> ? LIMIT 1 FOR UPDATE');
+    $duplicate->execute([$categoryId, $name, $productId ?? 0]);
+    if ($duplicate->fetchColumn() !== false) throw new InvalidArgumentException('A product with this name already exists in this collection.');
 
     // Use actual current catalog unit costs, not client-provided prices.
     $existingMaterials = [];
@@ -364,7 +368,7 @@ try {
     }
     $total = $materialTotal + (float) $labor + (float) $packaging;
     $price = round($total * (1 + (float) $markup / 100), 2);
-    if ($total <= 0 || !is_finite($price) || $price > 100000000) {
+    if ($total <= 0 || $price <= 0 || !is_finite($price) || $price > 100000000) {
         throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
     }
     $priceSql = prod_money($price);
