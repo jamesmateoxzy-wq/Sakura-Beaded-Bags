@@ -43,6 +43,7 @@ require_once __DIR__ . '/../includes/header.php';
           <option value="Pending">Status: Pending</option>
           <option value="In Progress">Status: In Progress</option>
           <option value="Completed">Status: Completed</option>
+          <option value="In Transit">Status: Shipped</option>
           <option value="Delivered">Status: Delivered</option>
         </select>
       </label>
@@ -128,13 +129,13 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="order-detail-dates"><div><small>Order date</small><strong id="ordDetailDate"></strong></div><div><small>Delivery date</small><strong id="ordDetailDueDate"></strong></div></div>
         <div class="order-detail-item">
           <div class="order-detail-product"><strong id="ordDetailProduct"></strong><strong id="ordDetailItemPrice">₱0</strong></div>
-          <div class="order-detail-status"><span id="ordDetailProduction" class="badge badge-amber"></span><button type="button" class="order-view-bom" id="ordViewBom">View BOM</button></div>
+          <div class="order-detail-status"><span id="ordDetailProduction" class="badge badge-amber"></span><span id="ordDetailDelivery" class="badge badge-blue"></span><button type="button" class="order-view-bom" id="ordViewBom">View BOM</button></div>
           <div class="order-detail-bom" id="ordDetailBom" hidden></div>
         </div>
         <div class="order-detail-total"><span>Total</span><strong id="ordDetailTotal">₱0</strong></div>
         <span id="ordDetailPayment" class="badge badge-green"></span>
       </div>
-      <div class="modal-foot order-detail-foot"><div><button type="button" class="btn btn-outline order-cancel-btn" id="ordCancel">Cancel Order</button><button type="button" class="btn btn-outline" id="ordArchive">Archive</button></div><button type="button" class="btn btn-primary" data-close-modal="ordDetailModal">Close</button></div>
+      <div class="modal-foot order-detail-foot"><div><button type="button" class="btn btn-outline" id="ordShip" hidden>Shipped</button><button type="button" class="btn btn-outline order-cancel-btn" id="ordCancel">Cancel Order</button><button type="button" class="btn btn-outline" id="ordArchive">Archive</button></div><button type="button" class="btn btn-primary" data-close-modal="ordDetailModal">Close</button></div>
     </div>
   </div>
 
