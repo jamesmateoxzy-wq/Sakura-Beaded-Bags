@@ -26,6 +26,8 @@ $pageCss = 'payments.css';
 $pageJs = 'payments-live.js';
 
 require_once __DIR__ . '/../includes/header.php';
+require_once __DIR__ . '/../includes/final_features.php';
+try { $business=sbb_optional_settings(sbb_db()); } catch (Throwable $e) { $business=[]; error_log('SBB business settings: '.$e->getMessage()); }
 ?>
 <section class="payments-page" aria-label="Payments and Sales">
     <?php if ($isDemo): ?>
@@ -153,7 +155,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <button type="button" id="printSlip" class="btn btn-outline btn-sm" disabled>Print Slip</button><button type="button" class="icon-btn pay-slip-close" data-close-modal="paymentSlipModal" aria-label="Close"><?= icon('x') ?></button>
             </div>
             <div id="slipEmpty" class="pay-slip-empty">Select a transaction to view its payment slip.</div>
-            <div id="slipDetails" hidden>
+            <div id="slipDetails" hidden><div class="final-business"><strong><?= e($business['boutique_name']??'Sakura Beaded Bags') ?></strong><small><?= e(implode(' · ',array_filter([$business['address']??'',$business['contact']??'']))) ?></small></div>
                 <div class="pay-slip-meta">
                     <div>
                         <strong id="slipCustomer"></strong>
