@@ -235,6 +235,20 @@ try {
         prod_out(['ok' => true, 'id' => (int) $pdo->lastInsertId(), 'message' => 'Category saved in MySQL.'], 201);
     }
 
+    if ($action === 'remove_category') {
+        $id = prod_positive_id($body['id'] ?? null, 'category');
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('SELECT category_id FROM product_categories WHERE category_id = ? FOR UPDATE');
+        $stmt->execute([$id]);
+        if ($stmt->fetchColumn() === false) throw new InvalidArgumentException('Category not found. Refresh and retry.');
+        $stmt = $pdo->prepare('SELECT product_id FROM products WHERE category_id = ? LIMIT 1 FOR UPDATE');
+        $stmt->execute([$id]);
+        if ($stmt->fetchColumn() !== false) throw new InvalidArgumentException('This category is linked to existing products, including removed products. Reassign products before removing the category.');
+        $pdo->prepare('DELETE FROM product_categories WHERE category_id = ?')->execute([$id]);
+        $pdo->commit();
+        prod_out(['ok' => true, 'message' => 'Category removed from MySQL.']);
+    }
+
     if ($action === 'remove_product') {
         $productId = prod_positive_id($body['id'] ?? null, 'product');
         $pdo->beginTransaction();
