@@ -281,8 +281,8 @@ function ord_cancel(PDO $pdo, array $data): array {
         return ['ok' => true, 'message' => 'Order is already marked Cancelled in Production.'];
     }
     if ($order['archived_at'] !== null) throw new InvalidArgumentException('Archived orders cannot be cancelled.');
-    if (in_array($order['delivery_status'], ['Delivered', 'Returned'], true)) {
-        throw new InvalidArgumentException('Delivered or returned orders cannot be cancelled.');
+    if (in_array($order['delivery_status'], ['In Transit', 'Delivered', 'Returned'], true)) {
+        throw new InvalidArgumentException('Shipped, delivered or returned orders cannot be cancelled.');
     }
     if (!in_array($status, ['Pending', 'In Production', 'Ready', 'Completed'], true)) {
         throw new InvalidArgumentException('This order cannot be cancelled.');
@@ -352,13 +352,22 @@ function ord_advance(PDO $pdo, array $data): array {
 
     $type = 'Production';
     $oldStatus = $production;
-    if ($production === 'Pending') {
+    if (($data['transition'] ?? '') === 'ship') {
+        if ($production !== 'Completed' || !in_array($delivery, ['Not Scheduled', 'For Delivery'], true)) {
+            throw new InvalidArgumentException('Only completed, unshipped orders can be marked as shipped.');
+        }
+        $newStatus = 'In Transit';
+        $oldStatus = $delivery;
+        $column = 'delivery_status';
+        $type = 'Delivery';
+    } elseif ($production === 'Pending') {
         $newStatus = 'In Production';
         $column = 'production_status';
     } elseif ($production === 'In Production' || $production === 'Ready') {
         $newStatus = 'Completed';
         $column = 'production_status';
     } elseif ($production === 'Completed') {
+        if ($delivery !== 'In Transit') throw new InvalidArgumentException('Mark this order as shipped before marking it delivered.');
         // Payments API takes the same order-row lock before recording money.
         // These totals therefore cannot change concurrently with this check.
         $totals = $pdo->prepare('SELECT COALESCE(SUM(quantity * unit_price), 0)
@@ -408,6 +417,17 @@ function ord_archive(PDO $pdo, array $data): array {
     return ['ok' => true, 'message' => 'Order archived. No inventory changed.'];
 }
 
+function ord_unarchive(PDO $pdo, array $data): array {
+    $orderId = ord_id($data['orderId'] ?? null, 'order');
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt->execute([$orderId]);
+    if ($stmt->fetchColumn() === false) throw new InvalidArgumentException('Order not found.');
+    $pdo->prepare('UPDATE customer_orders SET archived_at = NULL WHERE order_id = ?')->execute([$orderId]);
+    $pdo->commit();
+    return ['ok' => true, 'message' => 'Order removed from archive. Status, payments and inventory were unchanged.'];
+}
+
 try {
     $pdo = sbb_db();
     if ($method === 'GET') ord_get($pdo);
@@ -424,6 +444,7 @@ try {
     if ($action === 'create_order') ord_out(ord_create($pdo, $data), 201);
     if ($action === 'cancel_order') ord_out(ord_cancel($pdo, $data));
     if ($action === 'archive_order') ord_out(ord_archive($pdo, $data));
+    if ($action === 'unarchive_order') ord_out(ord_unarchive($pdo, $data));
     if ($action === 'advance_order') ord_out(ord_advance($pdo, $data));
     ord_fail('Unknown action.');
 } catch (InvalidArgumentException $e) {

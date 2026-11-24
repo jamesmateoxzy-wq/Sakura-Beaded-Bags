@@ -211,7 +211,30 @@
     else if(products.length) selectProduct(products[0].id);
     else {selectedId=null;draft=null;$('costSheet').hidden=true;$('emptyState').hidden=false;listProducts();}
   }
+  function renderCategoryList() {
+    $('acList').innerHTML = categories.length ? categories.map(c =>
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>'+esc(c.name)+'</span><button type="button" class="btn btn-outline btn-sm" data-remove-category="'+esc(c.id)+'">Remove</button></div>'
+    ).join('') : '<p class="hint">No categories yet.</p>';
+  }
   function setup() {
+    $('acList').addEventListener('click', async event => {
+      const button=event.target.closest('[data-remove-category]');
+      if(!button || pending)return;
+      const category=categories.find(c=>c.id===Number(button.dataset.removeCategory));
+      if(!category || !window.confirm('Remove category '+category.name+'?'))return;
+      const error=$('acError');
+      error.hidden=true;setBusy(true);
+      try {
+        const result=await request({action:'remove_category',id:category.id});
+        const data=await request();
+        categories=data.categories||[];csrf=data.csrf||csrf;
+        if(lastCreatedCategoryId===category.id)lastCreatedCategoryId=null;
+        populateCategories();renderCategoryList();listProducts();
+        if(newDraft)newDraft.categoryId=Number($('nCategory').value);
+        toast(result.message||'Category removed.');
+      }catch(e){error.textContent=e.message;error.hidden=false;}
+      finally{setBusy(false);}
+    });
     $('productSearch').addEventListener('input',listProducts);
     $('categoryFilter').addEventListener('change',listProducts);
     $('nPhoto').addEventListener('change',event=>chooseProductPhoto(event.target.files?.[0]));
@@ -220,6 +243,7 @@
       $('addCategoryForm').reset();
       $('acError').textContent = '';
       $('acError').hidden = true;
+      renderCategoryList();
       S.openModal('addCategoryModal');
     });
     $('acName').addEventListener('input',()=>{ $('acError').hidden = true; });
@@ -244,7 +268,8 @@
         lastCreatedCategoryId = Number(saved.id);
         $('nCategory').value = String(lastCreatedCategoryId);
         if(newDraft) newDraft.categoryId=Number($('nCategory').value);
-        S.closeModal('addCategoryModal');
+        $('acName').value='';
+        renderCategoryList();
         toast('Category saved in MySQL. It is ready for new products!');
       } catch (e) {
         showError(e.message);
