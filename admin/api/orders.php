@@ -120,10 +120,12 @@ function ord_get(PDO $pdo): void {
     $orderQuery = $pdo->prepare('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
             c.customer_id, c.full_name,
-            b.order_total, b.amount_paid, b.balance_due, b.payment_status
+            b.order_total, b.amount_paid, b.balance_due, b.payment_status,
+            COALESCE(refunds.refunded_amount,0) AS refunded_amount
         FROM customer_orders o
         JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
+        LEFT JOIN (SELECT order_id,SUM(amount) AS refunded_amount FROM payments WHERE payment_status = \'Refunded\' GROUP BY order_id) refunds ON refunds.order_id=o.order_id
         LEFT JOIN (SELECT order_id FROM customer_orders ORDER BY order_id DESC LIMIT 100) recent ON recent.order_id=o.order_id
         WHERE recent.order_id IS NOT NULL OR (o.due_date < ? AND o.archived_at IS NULL AND o.production_status <> \'Cancelled\' AND o.delivery_status NOT IN (\'Delivered\',\'Returned\'))
         ORDER BY o.order_id DESC');
@@ -137,7 +139,7 @@ function ord_get(PDO $pdo): void {
             'notes' => (string) ($r['notes'] ?? ''),
             'date' => substr((string) $r['order_date'], 0, 10), 'dueDate' => $r['due_date'],
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
-            'payment' => $r['payment_status'],
+            'payment' => $r['payment_status'], 'refundedAmount'=>(float)$r['refunded_amount'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
             'balance' => (float) $r['balance_due'], 'archived' => $r['archived_at'] !== null,
             'items' => [], 'materials' => [], 'history'=>[],
