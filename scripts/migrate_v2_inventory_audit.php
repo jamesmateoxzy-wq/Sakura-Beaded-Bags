@@ -14,5 +14,12 @@ try {
             $pdo->exec("ALTER TABLE inventory_movements ADD COLUMN $field DECIMAL(12,2) NULL");
         }
     }
-    echo "SUCCESS: inventory audit columns ready. Older unknown balances remain NULL.\n";
+    $triggerCheck=$pdo->prepare("SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema=DATABASE() AND trigger_name=?");
+    foreach (['UPDATE'=>'v2_inventory_no_update','DELETE'=>'v2_inventory_no_delete'] as $event=>$name) {
+        $triggerCheck->execute([$name]);
+        if (!(int)$triggerCheck->fetchColumn()) {
+            $pdo->exec("CREATE TRIGGER $name BEFORE $event ON inventory_movements FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Inventory history is append-only; use a correction movement'");
+        }
+    }
+    echo "SUCCESS: inventory audit columns and append-only triggers ready. Older unknown balances remain NULL.\\n";
 } catch (Throwable $e) { fwrite(STDERR, $e->getMessage()."\n"); exit(1); }
