@@ -23,8 +23,8 @@ $actions = [];
 try {
     $pdo = sbb_db();
     $schema = (string) $pdo->query('SELECT DATABASE()')->fetchColumn();
-    if ($schema !== 'sakura_beaded_bags') {
-        throw new RuntimeException('Unexpected database: ' . $schema . '. Expected sakura_beaded_bags.');
+    if (!in_array($schema, ['sakura_beaded_bags', 'sakura_beaded_bags_v2_test'], true) && !($schema === 'sakura_beaded_bags_v2' && getenv('SBB_ALLOW_CLOUD_V2') === '1')) {
+        throw new RuntimeException('Unexpected database: ' . $schema . '. Refusing migration.');
     }
 
     $tableExists = $pdo->prepare(
