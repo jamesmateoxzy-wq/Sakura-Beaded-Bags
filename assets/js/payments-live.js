@@ -43,8 +43,6 @@
     updateReference();
     if (preferredSlip) {const t=payments.find(p=>p.id===preferredSlip);chosenSlip=t?t.slipId:preferredSlip;}
     if (!orders.some(o => o.slipId === chosenSlip)) chosenSlip = orders.length ? orders[0].slipId : '';
-    $('paymentSlipOrder').innerHTML=orders.map(o=>'<option value="'+esc(o.slipId)+'">'+esc(o.slipId+' · '+o.id+' · '+o.customer)+'</option>').join('');
-    $('paymentSlipOrder').value=chosenSlip;$('viewOrderSlip').disabled=!orders.length;
     renderSummary(); renderOrderOptions(); renderTransactions(); renderSlip();
   }
   function renderSummary() {
@@ -166,7 +164,6 @@
     if(b){chosenSlip=b.dataset.slip;renderSlip();Sakura.openModal('paymentSlipModal');}
   });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
-  $('viewOrderSlip').addEventListener('click',()=>{chosenSlip=$('paymentSlipOrder').value;renderSlip();Sakura.openModal('paymentSlipModal');});
   $('addPaymentMethod').addEventListener('click',async()=>{
     if(busy)return;const name=window.prompt('New payment method name:');if(name===null||!name.trim())return;
     const required=window.confirm('Does this payment method require a reference number? OK = Yes, Cancel = No.');
