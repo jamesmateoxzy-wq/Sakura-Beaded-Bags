@@ -66,6 +66,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="order-field"><label for="ordId">Order ID · auto</label><input class="input" id="ordId" readonly value="ORD-001"></div>
             <div class="order-field"><label for="ordCustomer">Customer *</label><div class="order-control"><input class="input" id="ordCustomer" maxlength="90" required><button type="button" class="mini-edit" data-focus="ordCustomer" aria-label="Edit customer"><?= icon('edit') ?></button></div></div>
             <div class="order-field"><label for="ordAddress">Address *</label><div class="order-control"><input class="input" id="ordAddress" maxlength="160" required><button type="button" class="mini-edit" data-focus="ordAddress" aria-label="Edit address"><?= icon('edit') ?></button></div></div>
+            <div class="order-field"><label for="ordPhone">Contact Number *</label><input class="input" id="ordPhone" type="tel" maxlength="30" required></div>
           </div>
           <div class="order-create-grid order-create-middle">
             <div class="order-field order-field-product"><label for="ordProduct">Product *</label><div class="order-control"><select class="select" id="ordProduct" required></select></div></div>
@@ -74,7 +75,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="order-field order-field-notes"><label for="ordNotes">Notes</label><div class="order-control"><textarea class="textarea" id="ordNotes" rows="2" placeholder="Add order notes"></textarea><button type="button" class="mini-edit" data-focus="ordNotes" aria-label="Edit notes"><?= icon('edit') ?></button></div></div>
           </div>
 
-          <div class="order-bom-head"><div><h3 id="ordBomTitle">Bill of Materials</h3><p class="order-material-meta">Products sets the recipe, labor, packaging and down-payment policy. Orders use those saved values.</p></div></div>
+          <div class="order-bom-head"><div><h3 id="ordBomTitle">Bill of Materials</h3><p class="order-material-meta">Baseline recipe from Products. Inventory is deducted when production starts.</p></div></div>
           <div class="order-bom-wrap">
             <table class="order-bom-table"><thead><tr><th>Material</th><th>Qty</th><th>Unit cost</th><th>Subtotal</th><th></th></tr></thead><tbody id="ordBomRows"></tbody></table>
           </div>
