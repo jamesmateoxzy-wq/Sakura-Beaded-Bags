@@ -30,11 +30,11 @@ require_once __DIR__ . '/../includes/header.php';
 <section class="payments-page" aria-label="Payments and Sales">
     <?php if ($isDemo): ?>
         <div class="pay-mode-banner" role="status">
-            <strong>Loading payments</strong> &middot; Connecting to the MySQL payment ledger.
+            <strong>Loading payments</strong> &middot; Retrieving payment records.
         </div>
     <?php else: ?>
         <div class="pay-mode-banner" role="status">
-            <strong>Loading payments</strong> &middot; Connecting to the MySQL payment ledger.
+            <strong>Loading payments</strong> &middot; Retrieving payment records.
         </div>
     <?php endif; ?>
 
