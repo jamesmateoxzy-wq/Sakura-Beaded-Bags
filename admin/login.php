@@ -38,9 +38,9 @@ $loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SC
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="../assets/css/login.css">
-  <link rel="stylesheet" href="../assets/css/responsive.css">
+  <link rel="stylesheet" href="<?= e(sbb_asset_url('css/style.css')) ?>">
+  <link rel="stylesheet" href="<?= e(sbb_asset_url('css/login.css')) ?>">
+  <link rel="stylesheet" href="<?= e(sbb_asset_url('css/responsive.css')) ?>">
 </head>
 <body class="login-body">
 
@@ -78,6 +78,6 @@ $loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SC
   </section>
 
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script src="../assets/js/login.js"></script>
+  <script src="<?= e(sbb_asset_url('js/login.js')) ?>"></script>
 </body>
 </html>
