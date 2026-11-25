@@ -50,13 +50,14 @@
     var date = new Date(v + 'T12:00:00');
     return isNaN(date.getTime()) ? String(v) : date.toLocaleDateString('en-PH', {year:'numeric', month:'short', day:'numeric'});
   }
-  function deliveryLabel(s) { return s === 'In Transit' ? 'Shipped' : s; }
+  function deliveryLabel(s) { return s === 'In Transit' ? 'Shipped' : ['Not Scheduled','For Delivery'].includes(s) ? 'Pending' : s; }
+  function statusLabel(s) { return ({'In Production':'In Progress','Ready':'In Progress','Unpaid':'Pending','Partial':'Downpayment','Paid':'Fully Paid'})[s] || s; }
   function badgeClass(s) {
     return ['Completed','Delivered','Paid'].includes(s) ? 'badge-green' :
-      ['Pending','Not Scheduled','Unpaid'].includes(s) ? 'badge-amber' :
+      ['Pending','Not Scheduled','For Delivery','Unpaid'].includes(s) ? 'badge-amber' :
       ['In Production','Ready','For Delivery','In Transit','Shipped','Partial'].includes(s) ? 'badge-blue' : 'badge-pink';
   }
-  function badge(s) { return '<span class="badge ' + badgeClass(s) + '">' + esc(s) + '</span>'; }
+  function badge(s) { return '<span class="badge ' + badgeClass(s) + '">' + esc(statusLabel(s)) + '</span>'; }
   function product() {
     return products.find(function (p) { return String(p.id) === $('ordProduct').value; }) || null;
   }
@@ -167,7 +168,7 @@
         (activeGroup === 'archived' && archived(o));
       return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered') || (filter === 'In Transit' && o.delivery === 'In Transit')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
-    }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
+    }).sort(function (a,b) { return String(a.timestamp||a.date).localeCompare(String(b.timestamp||b.date)) || Number(a.rawId) - Number(b.rawId); });
     $('ordTotal').textContent = orders.filter(function (o) {
       return !archived(o);
     }).length;
@@ -183,7 +184,7 @@
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
-    var cards = orders.filter(currentProduction).sort(function (a,b) { return Number(a.rawId)-Number(b.rawId); }).slice(0,3);
+    var cards = orders.filter(currentProduction).sort(function (a,b) { return String(a.timestamp||a.date).localeCompare(String(b.timestamp||b.date)) || Number(a.rawId)-Number(b.rawId); }).slice(0,3);
     $('ordCards').innerHTML = cards.map(function (o,i) {
       return '<article class="order-card' + (o.id === activeOrderId ? ' is-highlighted' : '') + '" data-view="' + esc(o.id) +
         '" tabindex="0" role="button" aria-label="View order ' + esc(o.id) + '">' +
@@ -214,9 +215,9 @@
     $('ordDetailProduct').textContent = itemSummary(o);
     $('ordDetailItemPrice').textContent = money(o.total);
     $('ordDetailTotal').textContent = money(o.total);
-    $('ordDetailProduction').textContent = o.status;
+    $('ordDetailProduction').textContent = statusLabel(o.status);
     $('ordDetailProduction').className = 'badge ' + badgeClass(o.status);
-    $('ordDetailPayment').textContent = o.payment;
+    $('ordDetailPayment').textContent = statusLabel(o.payment);
     $('ordDetailPayment').className = 'badge ' + badgeClass(o.payment);
     $('ordDetailBom').hidden = true;
     $('ordViewBom').textContent = 'View BOM';
@@ -270,12 +271,12 @@
     $('ordStatusConfirmTitle').textContent = action + '?';
     $('ordStatusConfirmOrder').textContent = before.id;
     $('ordStatusFromLabel').textContent = isDelivery ? 'Current delivery status' : 'Current production status';
-    $('ordStatusFrom').textContent = isDelivery ? deliveryLabel(before.delivery) : before.status;
+    $('ordStatusFrom').textContent = isDelivery ? deliveryLabel(before.delivery) : statusLabel(before.status);
     $('ordStatusToLabel').textContent = isArchive ? 'Order record' :
       (isDelivery ? 'New delivery status' : 'New production status');
     $('ordStatusTo').textContent = isArchive ? 'Archived' :
       (isCancel ? 'Cancelled' : isShip ? 'Shipped' : isDelivery ? 'Delivered' :
-        (action === 'Start Production' ? 'In Production' : 'Completed'));
+        (action === 'Start Production' ? 'In Progress' : 'Completed'));
     if (isCancel) {
       $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will automatically move to Archived and remain available for history.';
     } else if (isArchive) {
