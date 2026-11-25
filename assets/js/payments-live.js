@@ -182,7 +182,7 @@
       await refresh(result.paymentId);
       Sakura.closeModal('recordPaymentModal');
       Sakura.openModal('paymentSlipModal');
-      notify(result.message || 'Payment saved in MySQL.');
+      notify(result.message || 'Payment saved successfully.');
     } catch(error) { setError(error.message || 'Could not save payment.'); await refresh().catch(()=>{}); }
     finally { busy=false; renderOrderOptions(); }
   });
@@ -191,7 +191,7 @@
   updateReference();
   refresh().then(()=>{
     const banner = document.querySelector('.pay-mode-banner');
-    if (banner) banner.textContent = 'Local MySQL prototype · Payments are recorded in the database. No payment gateway is connected.';
+    if (banner) banner.textContent = 'Payments are recorded in the system. Payment verification is handled manually by authorized staff.';
     saveBtn.textContent = 'Save Payment';
     const params=new URLSearchParams(location.search);
     if (params.get('action') === 'record') {
@@ -201,5 +201,5 @@
       updateBalanceHint();
       Sakura.openModal('recordPaymentModal');
     }
-  }).catch(error=>{setError('Could not load payments: '+error.message);notify('Payments API unavailable. Check PHP server terminal.');});
+  }).catch(error=>{setError('Could not load payments: '+error.message);notify('Unable to load payments. Please try again or contact the system administrator.');});
 })();
