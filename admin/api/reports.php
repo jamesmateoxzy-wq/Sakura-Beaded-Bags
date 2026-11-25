@@ -52,12 +52,13 @@ try {
     $payments = $db->query("SELECT pay.payment_id AS id, pay.order_id AS orderId,
         DATE(pay.payment_date) AS date, pay.amount
         FROM payments pay JOIN customer_orders o ON o.order_id = pay.order_id
-        WHERE pay.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
+        WHERE pay.payment_status = 'Successful'
         ORDER BY pay.payment_date, pay.payment_id")->fetchAll(PDO::FETCH_ASSOC);
     $expenses = $db->query('SELECT expense_id AS id, expense_date AS date, category, description, amount
         FROM expenses ORDER BY expense_date, expense_id')->fetchAll(PDO::FETCH_ASSOC);
+    $refunds = $db->query('SELECT order_id AS orderId, DATE(refunded_at) AS date, refund_amount AS amount FROM order_refunds ORDER BY refunded_at')->fetchAll(PDO::FETCH_ASSOC);
     $db->commit();
-    report_reply(['ok' => true, 'orders' => $orders, 'items' => $items, 'payments' => $payments, 'expenses' => $expenses]);
+    report_reply(['ok' => true, 'orders' => $orders, 'items' => $items, 'payments' => $payments, 'expenses' => $expenses, 'refunds' => $refunds]);
 } catch (Throwable $e) {
     if (isset($db) && $db->inTransaction()) $db->rollBack();
     error_log('SBB Financial Reports API: ' . $e->getMessage());
