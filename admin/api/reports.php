@@ -34,111 +34,32 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
 
 try {
     $db = sbb_db();
-    // Aggregate items and payments independently to avoid multiplying amounts
-    // when an order has more than one item and more than one payment.
-    // Exclude cancelled orders and non-successful payments from the report.
-    $stmt = $db->query(<<<'SQL'
-SELECT o.order_id, DATE(o.order_date) AS order_day, o.production_status,
-       COALESCE(items.booked_value, 0.00) AS booked_value,
-       COALESCE(items.estimated_cost, 0.00) AS estimated_cost,
-       COALESCE(receipts.paid_value, 0.00) AS paid_value
-FROM customer_orders AS o
-LEFT JOIN (
-    SELECT order_id,
-           SUM(quantity * unit_price) AS booked_value,
-           SUM(quantity * estimated_unit_cost) AS estimated_cost
-    FROM order_items
-    GROUP BY order_id
-) AS items ON items.order_id = o.order_id
-LEFT JOIN (
-    SELECT order_id, SUM(amount) AS paid_value
-    FROM payments
-    WHERE payment_status = 'Successful'
-    GROUP BY order_id
-) AS receipts ON receipts.order_id = o.order_id
-WHERE o.production_status <> 'Cancelled'
-ORDER BY o.order_date DESC, o.order_id DESC
-SQL);
-
-    $orders = [];
-    $totals = ['bookedSales' => 0.0, 'totalSales' => 0.0, 'estimatedProductionCost' => 0.0, 'receivedForOrders' => 0.0, 'balanceDue' => 0.0];
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $sale = (float) $row['booked_value'];
-        $cost = (float) $row['estimated_cost'];
-        $paid = (float) $row['paid_value'];
-        $balance = max(0.0, round($sale - $paid, 2));
-        $orders[] = [
-            'id' => sprintf('ORD-%03d', (int) $row['order_id']),
-            'date' => (string) $row['order_day'],
-            'status' => (string) $row['production_status'],
-            'total' => $sale,
-            'estimatedCost' => $cost,
-            'received' => $paid,
-            'balance' => $balance,
-        ];
-        $totals['bookedSales'] += $sale;
-        $totals['totalSales'] += $paid;
-        $totals['estimatedProductionCost'] += $cost;
-        $totals['receivedForOrders'] += $paid;
-        $totals['balanceDue'] += $balance;
-    }
-
-    $paymentStmt = $db->query(<<<'SQL'
-SELECT pay.payment_id, pay.order_id, DATE(pay.payment_date) AS payment_day, pay.amount
-FROM payments AS pay
-INNER JOIN customer_orders AS o ON o.order_id = pay.order_id
-WHERE pay.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
-ORDER BY pay.payment_date ASC, pay.payment_id ASC
-SQL);
-    $payments = [];
-    foreach ($paymentStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $payments[] = [
-            'id' => (int) $row['payment_id'],
-            'orderId' => sprintf('ORD-%03d', (int) $row['order_id']),
-            'date' => (string) $row['payment_day'],
-            'amount' => (float) $row['amount'],
-        ];
-    }
-
-    $expenses = [];
-    $operatingTotal = 0.0;
-    $stmt = $db->query('SELECT expense_id, expense_date, category, description, amount
-        FROM expenses ORDER BY expense_date DESC, expense_id DESC');
-    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-        $amount = (float) $row['amount'];
-        $operatingTotal += $amount;
-        $expenses[] = [
-            'id' => (int) $row['expense_id'],
-            'date' => (string) $row['expense_date'],
-            'category' => (string) $row['category'],
-            'description' => (string) ($row['description'] ?? ''),
-            'amount' => $amount,
-        ];
-    }
-
-    $totals['operatingExpenses'] = $operatingTotal;
-    $totals['estimatedProfit'] = $totals['totalSales'] - $totals['estimatedProductionCost'] - $operatingTotal;
-    $totals['orderCount'] = count($orders);
-    foreach ($totals as $key => $val) {
-        if ($key !== 'orderCount') $totals[$key] = round((float) $val, 2);
-    }
-
-    report_reply([
-        'ok' => true,
-        'orders' => $orders,
-        'payments' => $payments,
-        'expenses' => $expenses,
-        'summary' => $totals,
-        'methodology' => [
-            'sales' => 'Successful payments for non-cancelled orders, grouped by payment date. Cancelled and refunded payments are excluded.',
-            'productionCost' => 'Estimated production cost saved on each order item at order creation.',
-            'operatingExpenses' => 'Separate entries in the expenses table, grouped by their expense date.',
-            'received' => 'Payments received toward selected orders regardless of the payment date.',
-            'profit' => 'Estimate: successful payments minus saved estimated production cost and recorded operating expenses. Not audited net income.',
-            'limitations' => 'Refunded and cancelled payments are excluded. Taxes, accruals, and automated payroll/expense entry are not included. Do not record production costs in expenses again or they will be double-counted.',
-        ],
-    ]);
+    $db->beginTransaction();
+    // Order cohort uses saved selling prices and saved costs, never current catalog pricing.
+    $orders = $db->query("SELECT o.order_id AS id, DATE(o.order_date) AS date, o.production_status AS status,
+        c.customer_id AS customerId, c.full_name AS customer, b.order_total AS total,
+        b.amount_paid AS received, b.balance_due AS balance
+        FROM customer_orders o JOIN customers c ON c.customer_id = o.customer_id
+        JOIN v_order_balances b ON b.order_id = o.order_id
+        WHERE o.production_status <> 'Cancelled' ORDER BY o.order_date, o.order_id")->fetchAll(PDO::FETCH_ASSOC);
+    $items = $db->query("SELECT i.order_id AS orderId, i.product_id AS productId, p.product_name AS product,
+        i.quantity, i.unit_price AS price, i.estimated_unit_cost AS cost,
+        i.material_cost_snapshot AS materialCost, i.labor_cost_snapshot AS laborCost,
+        i.other_cost_snapshot AS otherCost
+        FROM order_items i JOIN customer_orders o ON o.order_id = i.order_id
+        JOIN products p ON p.product_id = i.product_id
+        WHERE o.production_status <> 'Cancelled' ORDER BY i.order_id, i.order_item_id")->fetchAll(PDO::FETCH_ASSOC);
+    $payments = $db->query("SELECT pay.payment_id AS id, pay.order_id AS orderId,
+        DATE(pay.payment_date) AS date, pay.amount
+        FROM payments pay JOIN customer_orders o ON o.order_id = pay.order_id
+        WHERE pay.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
+        ORDER BY pay.payment_date, pay.payment_id")->fetchAll(PDO::FETCH_ASSOC);
+    $expenses = $db->query('SELECT expense_id AS id, expense_date AS date, category, description, amount
+        FROM expenses ORDER BY expense_date, expense_id')->fetchAll(PDO::FETCH_ASSOC);
+    $db->commit();
+    report_reply(['ok' => true, 'orders' => $orders, 'items' => $items, 'payments' => $payments, 'expenses' => $expenses]);
 } catch (Throwable $e) {
+    if (isset($db) && $db->inTransaction()) $db->rollBack();
     error_log('SBB Financial Reports API: ' . $e->getMessage());
-    report_reply(['ok' => false, 'error' => 'Could not load financial reports. Check the PHP server terminal.'], 500);
+    report_reply(['ok' => false, 'error' => 'Could not load financial reports. Check that the V2 snapshot migration is applied.'], 500);
 }
