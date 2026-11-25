@@ -50,5 +50,7 @@ $_SESSION['user_email']   = $email;
 $_SESSION['user_name']    = $info['name'] ?? $email;
 $_SESSION['user_picture'] = $info['picture'] ?? '';
 $_SESSION['user_role']    = 'Admin';
+require_once __DIR__ . '/../includes/user_activity.php';
+sbb_log_user_activity('Login');
 header('Location: dashboard.php');
 exit;
