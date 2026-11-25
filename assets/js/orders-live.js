@@ -146,7 +146,7 @@
   }
   function currentProduction(o) {
     return !archived(o) && o.delivery !== 'Delivered' &&
-      ['Pending','In Production','Ready','Completed','Cancelled'].includes(o.status);
+      ['Pending','In Production','Ready','Completed'].includes(o.status);
   }
   function itemSummary(o) {
     return (o.items || []).map(function (v) { return v.product + ' ×' + v.qty; }).join(', ') || 'No items';
@@ -170,9 +170,9 @@
     $('ordNew').hidden = isArchiveView;
     $('ordArchiveActions').hidden = !isArchiveView;
     $('ordRows').innerHTML = shown.map(function (o) {
-      return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
+      return '<tr data-view="' + esc(o.id) + '"><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
-        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
+        '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-view="' + esc(o.id) + '">View Details</button>' + (o.status !== 'Cancelled' && o.delivery !== 'Delivered' ? ' <button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button>' : '') + '</td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
@@ -220,11 +220,12 @@
     $('ordShip').title = canShip(o) ? '' : 'Complete production before shipping';
     $('ordCancel').disabled = Boolean(o.archived) || o.status === 'Cancelled' ||
       o.delivery === 'In Transit' || o.delivery === 'Delivered' || o.delivery === 'Returned' || Number(o.paid) > 0;
-    $('ordArchive').disabled = Boolean(o.archived);
+    $('ordArchive').hidden = true;
+    $('ordArchive').disabled = true;
     var actionText = statusAction(o);
     advanceButton.hidden = !actionText || Boolean(o.archived);
     advanceButton.style.display = advanceButton.hidden ? 'none' : '';
-    $('ordCancel').hidden = o.status === 'Cancelled';
+    $('ordCancel').hidden = Boolean(o.archived) || o.status === 'Cancelled';
     $('ordCancel').style.display = $('ordCancel').hidden ? 'none' : '';
     advanceButton.disabled = busy || !actionText || Boolean(o.archived);
     advanceButton.textContent = actionText || '';
@@ -269,7 +270,7 @@
       (isCancel ? 'Cancelled' : isShip ? 'Shipped' : isDelivery ? 'Delivered' :
         (action === 'Start Production' ? 'In Production' : 'Completed'));
     if (isCancel) {
-      $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will remain in Production with the status Cancelled until archived.';
+      $('ordStatusConfirmMessage').textContent = 'Cancel this order? It will automatically move to Archived and remain available for history.';
     } else if (isArchive) {
       $('ordStatusConfirmMessage').textContent = 'Move this order to the Archived tab? It will remain saved for history.';
     } else {
@@ -277,7 +278,7 @@
     }
     var note = isShip ? 'Production is complete. Shipping does not change inventory or payments.' : isDelivery && Number(before.balance) > 0
       ? 'Outstanding balance: ' + money(before.balance) + '. Record full payment before marking this order delivered.'
-      : isDelivery ? 'Full payment is recorded. You can mark this order delivered.'
+      : isDelivery ? 'Full payment is recorded. Marking this order delivered will automatically archive it.'
       : isCancel && before.status === 'Pending' ? 'Pending V2 orders have no stock deduction. Paid orders cannot be cancelled yet.'
       : isCancel ? 'Materials already used in production will remain deducted. Paid orders cannot be cancelled.'
       : '';
@@ -333,12 +334,12 @@
       closeModal('ordDetailModal');
       detailOrder = null;
       notify(response.message);
-      if (action === 'Archive') {
+      if (response.archived || action === 'Archive') {
         activeGroup = 'archived';
         $('ordSearch').value = '';
         $('ordFilter').value = 'all';
       } else if (action === 'Cancel Order') {
-        activeGroup = 'production';
+        activeGroup = 'archived';
         $('ordSearch').value = '';
         $('ordFilter').value = 'all';
       }
@@ -467,7 +468,7 @@
       target.innerHTML = '<ul>' + (detailOrder.materials || []).map(function (m) {
         return '<li><span>' + esc(m.name) + '</span><strong>' + esc(m.qty) + ' ' + esc(m.unit) + '</strong></li>';
       }).join('') + '</ul>';
-      if (!detailOrder.materials.length) target.textContent = 'No allocated materials recorded.';
+      if (!detailOrder.materials.length) target.textContent = 'No materials recorded for this order.';
       target.hidden = false;
       $('ordViewBom').textContent = 'Hide BOM';
     } else { target.hidden = true; $('ordViewBom').textContent = 'View BOM'; }
