@@ -2,7 +2,7 @@
 /**
  * SBB Orders MySQL API. GET catalog/orders; POST create/cancel/archive/advance.
  * Requires scripts/migrate_order_requests.php --apply for idempotency.
- * This prototype allocates/deducts BOM on creation and returns it on cancellation.
+ * V2: snapshot the BOM on creation; deduct once when production starts.
  * No customer payments are recorded here.
  */
 declare(strict_types=1);
@@ -116,18 +116,19 @@ function ord_get(PDO $pdo): void {
     $orders = [];
     $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
-            c.customer_id, c.full_name,
+            c.customer_id, c.full_name, c.phone,
             b.order_total, b.amount_paid, b.balance_due, b.payment_status
         FROM customer_orders o
         JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
-        ORDER BY o.order_id DESC LIMIT 100')->fetchAll();
+        ORDER BY o.order_date ASC, o.order_id ASC')->fetchAll();
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
         $orders[$id] = [
             'id' => sprintf('ORD-%03d', $id), 'rawId' => $id,
             'customer' => $r['full_name'], 'customerId' => sprintf('CUST-%03d', (int) $r['customer_id']),
-            'address' => (string) ($r['delivery_address'] ?? ''),
+            'address' => (string) ($r['delivery_address'] ?? ''), 'phone' => (string) ($r['phone'] ?? ''),
+            'timestamp' => (string) $r['order_date'],
             'notes' => (string) ($r['notes'] ?? ''),
             'date' => substr((string) $r['order_date'], 0, 10), 'dueDate' => $r['due_date'],
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
@@ -167,17 +168,37 @@ function ord_get(PDO $pdo): void {
             ];
         }
     }
+    // V2 snapshots show the planned recipe even while an order is pending.
+    if ($orders) {
+        $stmt = $pdo->prepare("SELECT s.order_id, s.material_id, m.material_name, m.unit, s.required_qty
+            FROM order_material_snapshots s JOIN materials m ON m.material_id = s.material_id
+            WHERE s.order_id IN ($in) ORDER BY s.order_id, s.material_id");
+        $stmt->execute($ids);
+        $seen = [];
+        foreach ($stmt->fetchAll() as $r) {
+            $oid = (int)$r['order_id'];
+            if (!isset($seen[$oid])) { $orders[$oid]['materials'] = []; $seen[$oid] = true; }
+            $orders[$oid]['materials'][] = [
+                'id' => sprintf('MAT-%03d', (int)$r['material_id']),
+                'name' => $r['material_name'], 'unit' => $r['unit'], 'qty' => (float)$r['required_qty'],
+            ];
+        }
+    }
     ord_out([
         'ok' => true, 'products' => array_values($products), 'orders' => array_values($orders),
         'counts' => ['products' => count($products), 'orders' => count($orders)],
         'csrf' => ord_csrf(),
-        'stockPolicy' => 'Material quantities are deducted at order submission, restored only when a pending order is cancelled.',
+        'stockPolicy' => 'Material quantities are deducted only when production starts. Pending orders do not reserve stock.',
     ]);
 }
 
 function ord_create(PDO $pdo, array $data): array {
     $customer = ord_str($data['customer'] ?? null, 'Customer name', 120);
     $address = ord_str($data['address'] ?? null, 'Delivery address', 1000);
+    $phone = ord_str($data['phone'] ?? null, 'Contact number', 30);
+    if (!preg_match('/^[0-9+() .-]{5,30}$/D', $phone) || strlen(preg_replace('/\D/', '', $phone)) < 5) {
+        throw new InvalidArgumentException('Enter a valid contact number.');
+    }
     $productId = ord_id($data['productId'] ?? null, 'product');
     $qty = ord_id($data['quantity'] ?? null, 'quantity');
     if ($qty > 1000) throw new InvalidArgumentException('Maximum order quantity is 1,000 bags.');
@@ -197,7 +218,7 @@ function ord_create(PDO $pdo, array $data): array {
         if (!$existingId) throw new RuntimeException('Order request is already in progress; please refresh.');
         $pdo->commit();
         return ['ok' => true, 'orderId' => sprintf('ORD-%03d', (int) $existingId),
-            'message' => 'This order was already saved. No additional stock was deducted.', 'duplicate' => true];
+            'message' => 'This order was already saved. No duplicate order was created.', 'duplicate' => true];
     }
 
     $stmt = $pdo->prepare('SELECT product_id, product_name, selling_price, labor_cost, packaging_cost, other_cost, is_active
@@ -227,18 +248,15 @@ function ord_create(PDO $pdo, array $data): array {
         if ($perBag <= 0 || $needed <= 0 || $needed > 1000000) {
             throw new InvalidArgumentException('Recipe quantity is invalid for this order size.');
         }
-        if ((float) $mat['quantity_on_hand'] + 0.00001 < $needed) {
-            throw new InvalidArgumentException('Not enough ' . $mat['material_name'] . ': need ' . $needed . ', available ' . $mat['quantity_on_hand'] . '.');
-        }
         $materialsCost += $perBag * (float) $mat['unit_cost'];
-        $materials[] = ['id' => $mid, 'qty' => number_format($needed, 2, '.', '')];
+        $materials[] = ['id' => $mid, 'qty' => number_format($needed, 2, '.', ''), 'cost' => $mat['unit_cost']];
     }
     $unitCost = round($materialsCost + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'], 2);
     $unitPrice = number_format((float) $product['selling_price'], 2, '.', '');
     $unitCostStr = number_format($unitCost, 2, '.', '');
 
-    $stmt = $pdo->prepare('INSERT INTO customers (full_name, delivery_address) VALUES (?, ?)');
-    $stmt->execute([$customer, $address]);
+    $stmt = $pdo->prepare('INSERT INTO customers (full_name, delivery_address, phone) VALUES (?, ?, ?)');
+    $stmt->execute([$customer, $address, $phone]);
     $customerId = (int) $pdo->lastInsertId();
     $stmt = $pdo->prepare("INSERT INTO customer_orders
             (customer_id, due_date, production_status, delivery_status, delivery_address, notes)
@@ -249,21 +267,15 @@ function ord_create(PDO $pdo, array $data): array {
         (order_id, product_id, quantity, unit_price, estimated_unit_cost) VALUES (?, ?, ?, ?, ?)');
     $stmt->execute([$orderId, $productId, $qty, $unitPrice, $unitCostStr]);
 
-    $decrement = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand - ?
-        WHERE material_id = ? AND quantity_on_hand >= ?');
-    $movement = $pdo->prepare("INSERT INTO inventory_movements
-        (material_id, order_id, movement_type, quantity_change, note)
-        VALUES (?, ?, 'Production Use', ?, 'Allocated when order was created')");
+    $snapshot = $pdo->prepare('INSERT INTO order_material_snapshots (order_id, material_id, required_qty, unit_cost) VALUES (?, ?, ?, ?)');
     foreach ($materials as $material) {
-        $decrement->execute([$material['qty'], $material['id'], $material['qty']]);
-        if ($decrement->rowCount() !== 1) throw new InvalidArgumentException('Stock changed during checkout; refresh and retry.');
-        $movement->execute([$material['id'], $orderId, '-' . $material['qty']]);
+        $snapshot->execute([$orderId, $material['id'], $material['qty'], $material['cost']]);
     }
     $stmt = $pdo->prepare('UPDATE order_submission_keys SET order_id = ? WHERE request_key = ?');
     $stmt->execute([$orderId, $requestKey]);
     $pdo->commit();
     return ['ok' => true, 'orderId' => sprintf('ORD-%03d', $orderId),
-        'message' => 'Order saved to MySQL. Materials allocated from inventory.',
+        'message' => 'Pending order saved. Inventory will be deducted when production starts.',
         'total' => round((float) $unitPrice * $qty, 2), 'duplicate' => false];
 }
 
@@ -316,7 +328,7 @@ function ord_cancel(PDO $pdo, array $data): array {
     $stmt->execute([$orderId]);
     $pdo->commit();
     $message = $status === 'Pending'
-        ? 'Order marked Cancelled in Production. Reserved materials were returned to inventory.'
+        ? 'Pending order cancelled. Any legacy allocated stock was returned; V2 pending orders had no deduction.'
         : 'Order marked Cancelled in Production. Materials already used were not returned to inventory.';
     return ['ok' => true, 'message' => $message];
 }
@@ -325,7 +337,7 @@ function ord_cancel(PDO $pdo, array $data): array {
  * Advance exactly one stage, with a row lock and expected-state check.
  * The client must include the state it last displayed. A repeated POST
  * will fail rather than accidentally skipping another stage.
- * Stock was already allocated when the order was created: never deduct again.
+ * V2 stock is deducted atomically only when transitioning from Pending.
  */
 function ord_advance(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
@@ -361,6 +373,26 @@ function ord_advance(PDO $pdo, array $data): array {
         $column = 'delivery_status';
         $type = 'Delivery';
     } elseif ($production === 'Pending') {
+        $snap = $pdo->prepare('SELECT material_id, required_qty FROM order_material_snapshots WHERE order_id = ? ORDER BY material_id');
+        $snap->execute([$orderId]);
+        $recipe = $snap->fetchAll();
+        // Do not guess the inventory state of pre-V2 orders.
+        if (!$recipe) throw new InvalidArgumentException('Order has no V2 material snapshot. Review legacy stock before starting production.');
+        $lock = $pdo->prepare('SELECT material_name, quantity_on_hand, is_active FROM materials WHERE material_id = ? FOR UPDATE');
+        $decrement = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand - ? WHERE material_id = ? AND quantity_on_hand >= ?');
+        $movement = $pdo->prepare("INSERT INTO inventory_movements (material_id, order_id, movement_type, quantity_change, note)
+            VALUES (?, ?, 'Production Use', ?, 'Deducted when production started')");
+        foreach ($recipe as $item) {
+            $mid = (int)$item['material_id'];
+            $qty = (string)$item['required_qty'];
+            $lock->execute([$mid]);
+            $material = $lock->fetch();
+            if (!$material || !(int)$material['is_active'] || (float)$qty <= 0) throw new InvalidArgumentException('A required material is unavailable.');
+            if ((float)$material['quantity_on_hand'] < (float)$qty) throw new InvalidArgumentException('Insufficient stock for ' . $material['material_name'] . '. Replenish inventory first.');
+            $decrement->execute([$qty, $mid, $qty]);
+            if ($decrement->rowCount() !== 1) throw new RuntimeException('Stock changed; retry production.');
+            $movement->execute([$mid, $orderId, '-' . $qty]);
+        }
         $newStatus = 'In Production';
         $column = 'production_status';
     } elseif ($production === 'In Production' || $production === 'Ready') {
