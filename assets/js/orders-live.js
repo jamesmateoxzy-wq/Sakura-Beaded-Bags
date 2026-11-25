@@ -206,7 +206,7 @@
     detailOrder = o;
     renderOrders();
     $('ordDetailId').value = o.rawId;
-    $('ordDetailCode').textContent = o.id + ' · ' + o.customerId + ' · ' + o.paymentSlipId;
+    $('ordDetailCode').textContent = o.id + ' · ' + o.customerId + ' · ' + o.paymentSlipId + (o.status==='Cancelled'?' · Refund: '+money(o.refund):'');
     $('ordDetailCustomer').textContent = o.customer;
     $('ordDetailAddress').textContent = (o.address || 'Address not provided') + (o.phone ? ' · ' + o.phone : '');
     $('ordDetailDate').textContent = o.timestamp || dateText(o.date);
@@ -226,7 +226,7 @@
     $('ordShip').disabled = busy || !canShip(o);
     $('ordShip').title = canShip(o) ? '' : 'Complete production before shipping';
     $('ordCancel').disabled = Boolean(o.archived) || o.status === 'Cancelled' ||
-      o.delivery === 'In Transit' || o.delivery === 'Delivered' || o.delivery === 'Returned' || Number(o.paid) > 0;
+      o.delivery === 'In Transit' || o.delivery === 'Delivered' || o.delivery === 'Returned';
     $('ordArchive').hidden = true;
     $('ordArchive').disabled = true;
     var actionText = statusAction(o);
@@ -286,8 +286,8 @@
     var note = isShip ? 'Production is complete. Shipping does not change inventory or payments.' : isDelivery && Number(before.balance) > 0
       ? 'Outstanding balance: ' + money(before.balance) + '. Record full payment before marking this order delivered.'
       : isDelivery ? 'Full payment is recorded. Marking this order delivered will automatically archive it.'
-      : isCancel && before.status === 'Pending' ? 'Pending V2 orders have no stock deduction. Paid orders cannot be cancelled yet.'
-      : isCancel ? 'Materials already used in production will remain deducted. Paid orders cannot be cancelled.'
+      : isCancel && before.status === 'Pending' ? 'Pending V2 orders have no stock deduction. Record any actual refund before cancelling.'
+      : isCancel ? 'Deducted materials will be returned only after confirming all are physically recoverable.'
       : '';
     $('ordStatusConfirmNote').textContent = note;
     $('ordStatusConfirmNote').hidden = !note;
@@ -306,8 +306,8 @@
     var action = pendingOrderAction;
     if (action === 'Cancel Order' &&
         (before.archived || !['Pending','In Production','Ready','Completed'].includes(before.status) ||
-         before.delivery === 'In Transit' || before.delivery === 'Delivered' || before.delivery === 'Returned' || Number(before.paid) > 0)) {
-      notify('Only unpaid, undelivered orders can be cancelled.');
+         before.delivery === 'In Transit' || before.delivery === 'Delivered' || before.delivery === 'Returned')) {
+      notify('Only unshipped active orders can be cancelled.');
       return;
     }
     if (action === 'Archive' && before.archived) {
@@ -322,7 +322,21 @@
     }
 
     var payload = {orderId:before.rawId};
-    if (action === 'Cancel Order') payload.action = 'cancel_order';
+    if (action === 'Cancel Order') {
+      payload.action = 'cancel_order';
+      payload.refundAmount = '0';
+      if (Number(before.paid)>0) {
+        var refund = window.prompt('Amount actually refunded to the customer (maximum '+money(before.paid)+'). Enter 0 if none.', Number(before.paid).toFixed(2));
+        if(refund===null)return;
+        if(!/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/.test(refund.trim())||Number(refund)>Number(before.paid)){notify('Invalid refund amount.');return;}
+        if(!window.confirm('Confirm that the stated refund has already been handled outside SBB. SBB only records the amount.'))return;
+        payload.refundAmount=refund.trim();payload.refundConfirmed=true;
+      }
+      if(before.status!=='Pending') {
+        if(!window.confirm('Confirm ALL deducted materials are physically recoverable. The system will restore their exact quantities.'))return;
+        payload.restoreConfirmed=true;
+      }
+    }
     else if (action === 'Archive') payload.action = 'archive_order';
     else {
       payload.action = 'advance_order';
@@ -488,8 +502,7 @@
   $('ordCancel').addEventListener('click', async function () {
     if (!detailOrder || busy || detailOrder.archived ||
         !['Pending','In Production','Ready','Completed'].includes(detailOrder.status) ||
-        detailOrder.delivery === 'In Transit' || detailOrder.delivery === 'Delivered' || detailOrder.delivery === 'Returned' ||
-        Number(detailOrder.paid) > 0) return;
+        detailOrder.delivery === 'In Transit' || detailOrder.delivery === 'Delivered' || detailOrder.delivery === 'Returned') return;
     openOrderActionConfirmation('Cancel Order');
   });
   $('ordArchive').addEventListener('click', async function () {
