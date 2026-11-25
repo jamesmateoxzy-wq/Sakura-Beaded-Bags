@@ -108,13 +108,16 @@ try {
                 'min' => (float) $r['low_stock_threshold'],
             ];
         }, $rows);
-        $historyRows = $pdo->query('SELECT i.movement_id, i.movement_type, i.quantity_change, i.note, i.moved_at, m.material_name, m.unit FROM inventory_movements i JOIN materials m ON m.material_id=i.material_id ORDER BY i.moved_at DESC, i.movement_id DESC LIMIT 100')->fetchAll();
+        $historyRows = $pdo->query('SELECT i.movement_id, i.movement_type, i.quantity_change, i.note, i.moved_at, i.previous_quantity, i.resulting_quantity, m.material_name, m.unit FROM inventory_movements i JOIN materials m ON m.material_id=i.material_id ORDER BY i.moved_at DESC, i.movement_id DESC ')->fetchAll();
         $history = array_map(static function (array $r): array {
             return [
                 'material' => $r['material_name'],
                 'date' => substr((string) $r['moved_at'], 0, 10),
                 'activity' => $r['note'] === 'Opening balance' ? 'Opening balance' : $r['movement_type'],
                 'delta' => (float) $r['quantity_change'],
+                'timestamp' => (string)$r['moved_at'], 'reason' => $r['note'] ?: $r['movement_type'],
+                'before' => $r['previous_quantity'] === null ? null : (float)$r['previous_quantity'],
+                'after' => $r['resulting_quantity'] === null ? null : (float)$r['resulting_quantity'],
                 'unit' => $r['unit'],
             ];
         }, $historyRows);
@@ -146,8 +149,8 @@ try {
         $stmt->execute([$name, $unit, $cost, $stock, $min]);
         $id = (int) $pdo->lastInsertId();
         if ($stock > 0) {
-            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change, note) VALUES (?, 'Stock In', ?, 'Opening balance')");
-            $stmt->execute([$id, $stock]);
+            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change, note, previous_quantity, resulting_quantity) VALUES (?, 'Stock In', ?, 'Opening balance', 0, ?)");
+            $stmt->execute([$id, $stock, $stock]);
         }
         $pdo->commit();
         api_out(['ok' => true, 'message' => 'Material saved in MySQL.']);
@@ -202,13 +205,13 @@ try {
         if ($action === 'stock_in') {
             $stmt = $pdo->prepare('UPDATE materials SET quantity_on_hand = ?, unit_cost = ? WHERE material_id = ?');
             $stmt->execute([$newStock, $unitCost, $id]);
-            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change, moved_at) VALUES (?, 'Stock In', ?, ?)");
-            $stmt->execute([$id, $delta, $dateTime]);
+            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change, moved_at, note, previous_quantity, resulting_quantity) VALUES (?, 'Stock In', ?, ?, 'Stock replenishment', ?, ?)");
+            $stmt->execute([$id, $delta, $dateTime, $found['quantity_on_hand'], $newStock]);
         } else {
             $stmt = $pdo->prepare('UPDATE materials SET quantity_on_hand = ? WHERE material_id = ?');
             $stmt->execute([$newStock, $id]);
-            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change) VALUES (?, 'Correction', ?)");
-            $stmt->execute([$id, $delta]);
+            $stmt = $pdo->prepare("INSERT INTO inventory_movements (material_id, movement_type, quantity_change, note, previous_quantity, resulting_quantity) VALUES (?, 'Correction', ?, 'Stock correction', ?, ?)");
+            $stmt->execute([$id, $delta, $found['quantity_on_hand'], $newStock]);
         }
         $pdo->commit();
         api_out(['ok' => true, 'message' => $action === 'stock_in' ? 'Stock-In saved in MySQL.' : 'Correction saved in MySQL.']);
