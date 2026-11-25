@@ -93,6 +93,7 @@ $nav = [
         <div class="dropdown" id="profileMenu" role="menu">
           <a href="profile.php" role="menuitem"><?= icon('user') ?> My Profile</a>
           <a href="settings.php" role="menuitem"><?= icon('settings') ?> Account Settings</a>
+          <a href="user-logs.php" role="menuitem"><?= icon('document') ?> User Logs</a>
           <a href="logout.php" role="menuitem"><?= icon('logout') ?> Logout</a>
         </div>
       </div>
