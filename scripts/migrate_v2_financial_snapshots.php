@@ -6,7 +6,8 @@ require_once __DIR__ . '/../includes/db.php';
 try {
     $pdo = sbb_db();
     $schema = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
-    if ($schema !== 'sakura_beaded_bags_v2_test') throw new RuntimeException('Only the isolated V2 test database is allowed.');
+    $v2Schema = $schema;
+    if ($v2Schema !== 'sakura_beaded_bags_v2_test' && !($v2Schema === 'sakura_beaded_bags_v2' && getenv('SBB_ALLOW_CLOUD_V2') === '1')) throw new RuntimeException('Only isolated V2 databases are allowed; cloud V2 requires SBB_ALLOW_CLOUD_V2=1.');
     $apply = in_array('--apply', $argv, true);
     $fields = ['material_cost_snapshot','labor_cost_snapshot','other_cost_snapshot'];
     $check = $pdo->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'order_items' AND column_name = ?");
