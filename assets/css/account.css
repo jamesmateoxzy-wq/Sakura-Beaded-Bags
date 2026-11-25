@@ -19,3 +19,14 @@
 .connected strong { font-weight: 600; }
 
 @media (max-width: 960px) { .account-grid { grid-template-columns: 1fr; } }
+/* User Logs: keep search controls aligned without stretching grid items. */
+.user-logs-filter { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px; margin-bottom:20px; }
+.user-logs-filter .field { flex:1 1 240px; margin:0; }
+.user-logs-filter .input { height:44px; box-sizing:border-box; }
+.user-logs-filter-actions { display:flex; align-items:center; gap:10px; flex:0 0 auto; }
+.user-logs-filter-actions .btn { height:44px; min-height:44px; box-sizing:border-box; padding:0 18px; white-space:nowrap; text-decoration:none; line-height:1.2; }
+@media (max-width:540px) {
+  .user-logs-filter .field { flex-basis:100%; }
+  .user-logs-filter-actions { flex:1 1 100%; }
+  .user-logs-filter-actions .btn { flex:1; }
+}
