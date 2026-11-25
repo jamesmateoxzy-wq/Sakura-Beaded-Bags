@@ -125,7 +125,8 @@ require_once __DIR__ . '/../includes/header.php';
                         <select class="select" id="paymentMethod" name="method" required>
                             <option value="GCash">GCash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
-                        </select><button type="button" class="btn btn-outline btn-sm" id="addPaymentMethod">Add payment method</button>
+                            <option value="Other">Other</option>
+                        </select>
                     </div>
                     <div class="field">
                         <label for="paymentDate">Payment date <span class="req">*</span></label>
