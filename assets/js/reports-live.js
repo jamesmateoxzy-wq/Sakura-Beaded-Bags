@@ -58,7 +58,7 @@
       const unknown=items.length-known.length;
       const material=sum(known,i=>Number(i.quantity)*cents(i.materialCost)), labor=sum(known,i=>Number(i.quantity)*cents(i.laborCost)), other=sum(known,i=>Number(i.quantity)*cents(i.otherCost));
       const unclassified=costs-material-labor-other, gross=sales-costs, overhead=sum(expenses,e=>cents(e.amount));
-      const cash=sum(payments,p=>cents(p.amount)), outstanding=sum(orders,o=>Math.max(0,cents(o.balance)));
+      const cash=sum(payments,p=>cents(p.amount)), refunds=sum(data.refunds.filter(r=>match(r.date)),r=>cents(r.amount)), outstanding=sum(orders,o=>Math.max(0,cents(o.balance)));
       const status={Pending:0,Downpayment:0,'Fully Paid':0};
       orders.forEach(o=>{const paid=cents(o.received),total=cents(o.total);status[paid<=0?'Pending':paid>=total?'Fully Paid':'Downpayment']++;});
       const timeline=new Map();
@@ -80,10 +80,10 @@
         table('2. Material & Labor Expense Analysis','Saved per-unit cost components multiplied by order quantities. Unknown older components are not guessed.',['Cost component','Amount'],[['Materials (known)',money(material)],['Labor (known)',money(labor)],['Packaging and other (known)',money(other)],['Unclassified historical cost',money(unclassified)],['Total estimated production cost',money(costs)]]),
         table('3. Profitability Analysis','Gross profit uses booked sales less estimated production costs. Other operating expenses are separate.',['Metric','Value'],[['Booked sales',money(sales)],['Production costs',money(costs)],['Estimated gross profit',money(gross)],['Gross profit margin',pct(gross,sales)],['Recorded operating expenses',money(overhead)],['Estimated profit after expenses',money(gross-overhead)]]),
         table('4. Payment Breakdown','Current payment status of non-cancelled orders created in the selected period.',['Payment status','Orders'],Object.entries(status)),
-        table('5. Customer Insights','Customer records ranked by booked order value. New customer records: '+[...customers.keys()].filter(k=>match(first.get(k))).length+'. Existing system creates a customer record per order; repeat-customer retention is not reliable until customer reuse is implemented.',['Customer','Orders','Booked sales','Contribution'],topCustomers.map(([k,r])=>[r.name+' (CUST-'+k+')',r.orders,money(r.sales),pct(r.sales,sales)])),
+        table('5. Customer Insights','Customer records ranked by booked order value. New customer records: '+[...customers.keys()].filter(k=>match(first.get(k))).length+'. New orders reuse matching name and normalized contact number. Older duplicate customer records may still affect results.',['Customer','Orders','Booked sales','Contribution'],topCustomers.map(([k,r])=>[r.name+' (CUST-'+k+')',r.orders,money(r.sales),pct(r.sales,sales)])),
         table('6. Product Insights — Best-selling','Ranked by quantity ordered; current product names are displayed.',['Product','Quantity','Booked sales','Estimated gross profit'],topProducts.map(r=>[r.name,r.qty,money(r.sales),money(r.sales-r.cost)])),
         table('6b. Product Insights — Most profitable','Ranked by estimated gross profit.',['Product','Estimated gross profit','Margin'],profitable.map(r=>[r.name,money(r.sales-r.cost),pct(r.sales-r.cost,r.sales)])),
-        table('7. Cash-Flow Tracking','Successful receipts by payment date; outstanding is the current balance of selected orders, not an as-of historical balance. Refunded/cancelled payments are excluded.',['Metric','Amount'],[['Cash-in',money(cash)],['Outstanding balances',money(outstanding)],['Other recorded expenses',money(overhead)]])
+        table('7. Cash-Flow Tracking','Successful receipts by payment date, including retained original receipts on cancelled orders; cancellation refunds by refund date. Legacy voided or fully refunded transactions are excluded. Outstanding is current, not an as-of balance.',['Metric','Amount'],[['Cash-in',money(cash)],['Cancellation refunds',money(refunds)],['Net receipts after cancellation refunds',money(cash-refunds)],['Outstanding balances',money(outstanding)],['Other recorded expenses',money(overhead)]])
       ];
       $('repSections').innerHTML=html.join('');
       $('repExport').disabled=false;$('repPrint').disabled=false;
@@ -100,7 +100,7 @@
   ['repPeriod','repMonth','repYear','repFrom','repTo','repGranularity'].forEach(id=>$(id).addEventListener('change',render));
   fetch('api/reports.php',{credentials:'same-origin',cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Report unavailable');return d;}).then(d=>{
     data=d;
-    const years=[...new Set([String(today.getFullYear()),...d.orders.concat(d.payments,d.expenses).map(x=>x.date.slice(0,4))])].sort().reverse();
+    const years=[...new Set([String(today.getFullYear()),...d.orders.concat(d.payments,d.expenses,d.refunds).map(x=>x.date.slice(0,4))])].sort().reverse();
     $('repYear').innerHTML=years.map(y=>'<option>'+esc(y)+'</option>').join('');
     render();
   }).catch(e=>{$('repStatus').textContent='Could not load reports: '+e.message;});
