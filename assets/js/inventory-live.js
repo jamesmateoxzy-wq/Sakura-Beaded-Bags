@@ -113,7 +113,7 @@
     $('invHistoryRows').innerHTML = h.map(function(v) {
       var delta = Number(v.delta);
       return '<li><div class="inv-history-details"><strong>' + esc(v.material) +
-        '</strong><small>' + esc(formattedDate(v.date)) + ' · ' + esc(v.activity) +
+        '</strong><small>' + esc(v.timestamp || formattedDate(v.date)) + ' · ' + esc(v.reason || v.activity) + '<br>Before: ' + esc(v.before == null ? 'Unknown' : v.before) + ' · After: ' + esc(v.after == null ? 'Unknown' : v.after) +
         '</small></div><span class="inv-history-quantity ' + (delta >= 0 ? 'is-positive' : 'is-negative') + '">' +
         (delta > 0 ? '+' : delta < 0 ? '−' : '') + esc(Math.abs(delta)) + ' ' + esc(v.unit) + '</span></li>';
     }).join('');
