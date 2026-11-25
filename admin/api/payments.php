@@ -189,7 +189,7 @@ function pay_create(PDO $pdo, array $data): array {
     $mark->execute([$paymentId, $key]);
     $pdo->commit();
     return ['ok' => true, 'paymentId' => pay_code($paymentId,'SLP'), 'duplicate' => false,
-        'balance' => ($total - $paid - $cents) / 100, 'message' => 'Payment saved to MySQL.'];
+        'balance' => ($total - $paid - $cents) / 100, 'message' => 'Payment saved successfully.'];
 }
 
 function pay_update_status(PDO $pdo, array $data): array {
