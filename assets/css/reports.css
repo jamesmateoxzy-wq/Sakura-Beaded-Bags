@@ -170,3 +170,22 @@
   .reports-layout .rep-chart-card{height:280px;padding:14px}
   .reports-layout .rep-analysis-card,.reports-layout .rep-glance-card{padding:16px}
 }
+
+/* Revised report: flexible filters and readable tables on small screens. */
+.v2-report-filters {display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.v2-report-filters label {display:grid;gap:5px;font-size:13px}
+.v2-report-filters [hidden] {display:none!important}
+.v2-report-filters input,.v2-report-filters select {max-width:100%;min-width:0}
+.v2-report-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-top:18px}
+.v2-report-section {min-width:0;padding:20px;break-inside:avoid}
+.v2-report-section h2 {font-size:17px;margin:0 0 8px}
+.v2-report-section p,.v2-report-note,#repStatus {font-size:13px;line-height:1.6}
+.v2-table-scroll {overflow-x:auto}
+.v2-table-scroll table {width:100%;border-collapse:collapse}
+.v2-table-scroll th,.v2-table-scroll td {padding:10px 8px;text-align:left;white-space:normal;overflow-wrap:anywhere}
+.v2-sales-bars {display:grid;gap:8px;margin:14px 0}
+.v2-sales-bars>div {display:grid;grid-template-columns:minmax(65px,1fr) minmax(50px,2fr) auto;gap:8px;align-items:center;font-size:12px}
+.v2-track {height:12px;border-radius:6px;background:#f7e7ed;overflow:hidden}
+.v2-track i {display:block;height:100%;background:#c85d87;border-radius:6px}
+@media(max-width:800px){.v2-report-grid{grid-template-columns:1fr}.v2-report-filters{width:100%}}
+@media print{.v2-report-grid{display:block}.v2-report-section{margin:0 0 14px;box-shadow:none}.v2-report-filters,.rep-actions{display:none!important}.v2-table-scroll{overflow:visible}.v2-report-note{color:#333}}
