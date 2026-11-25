@@ -9,16 +9,16 @@
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const cents = n => Math.round(Number(n || 0) * 100);
   const notify = message => { if (window.Sakura && typeof Sakura.toast === 'function') Sakura.toast(message); };
-  let orders = [], payments = [], summary = {}, csrf = '', busy = false, page = 1, chosenSlip = '', requestKey = '';
+  let orders = [], payments = [], methods = [], summary = {}, csrf = '', busy = false, page = 1, chosenSlip = '', requestKey = '';
   const pageSize = 5;
   const saveBtn = $('savePaymentBtn');
   const createKey = () => window.crypto && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : '';
   function setError(message) { $('paymentFormError').textContent = message || ''; $('paymentFormError').hidden = !message; }
   function orderFor(id) { return orders.find(item => String(item.rawId) === String(id)); }
   function balance(order) { return order ? cents(order.balance) : 0; }
-  function statusOf(payment) { return payment.status === 'Fully Paid' ? 'Fully Paid' : 'Partial'; }
+  function statusOf(payment) { return payment.status === 'Fully Paid' ? 'Fully Paid' : 'Downpayment'; }
   function statusBadge(label) {
-    const color = label === 'Fully Paid' ? 'badge-green' : label === 'Partial' ? 'badge-amber' : 'badge-pink';
+    const color = label === 'Fully Paid' ? 'badge-green' : label === 'Downpayment' ? 'badge-amber' : 'badge-pink';
     return '<span class="badge ' + color + '">' + esc(label) + '</span>';
   }
   async function request(method, payload) {
@@ -36,8 +36,15 @@
     orders = Array.isArray(data.orders) ? data.orders : [];
     payments = Array.isArray(data.payments) ? data.payments : [];
     summary = data.summary || {};
-    if (preferredSlip) chosenSlip = preferredSlip;
-    else if (!payments.some(p => p.id === chosenSlip)) chosenSlip = payments.length ? payments[0].id : '';
+    methods = data.methods || [];
+    const methodSelect=$('paymentMethod'), currentMethod=methodSelect.value;
+    methodSelect.innerHTML=methods.map(m=>'<option value="'+esc(m.name)+'">'+esc(m.name)+'</option>').join('');
+    if(methods.some(m=>m.name===currentMethod))methodSelect.value=currentMethod;
+    updateReference();
+    if (preferredSlip) {const t=payments.find(p=>p.id===preferredSlip);chosenSlip=t?t.slipId:preferredSlip;}
+    if (!orders.some(o => o.slipId === chosenSlip)) chosenSlip = orders.length ? orders[0].slipId : '';
+    $('paymentSlipOrder').innerHTML=orders.map(o=>'<option value="'+esc(o.slipId)+'">'+esc(o.slipId+' · '+o.id+' · '+o.customer)+'</option>').join('');
+    $('paymentSlipOrder').value=chosenSlip;$('viewOrderSlip').disabled=!orders.length;
     renderSummary(); renderOrderOptions(); renderTransactions(); renderSlip();
   }
   function renderSummary() {
@@ -72,9 +79,9 @@
     const f = $('paymentFilter').value;
     return payments.filter(p => (f === 'all' ||
       (f === 'paid' ? p.paymentStatus === 'Successful' && p.status === 'Fully Paid' :
-      f === 'partial' ? p.paymentStatus === 'Successful' && p.status === 'Partial' :
+      f === 'partial' ? p.paymentStatus === 'Successful' && p.status === 'Downpayment' :
       p.paymentStatus.toLowerCase() === f)) &&
-      (!search || [p.id,p.orderId,p.customer,p.reference,p.method].join(' ').toLowerCase().includes(search)));
+      (!search || [p.id,p.slipId,p.orderId,p.customer,p.reference,p.method].join(' ').toLowerCase().includes(search)));
   }
   function renderTransactions() {
     const rows = filtered();
@@ -82,12 +89,12 @@
     page = Math.max(1, Math.min(pages, page));
     const shown = rows.slice((page - 1) * pageSize, page * pageSize);
     $('paymentRows').innerHTML = shown.map(p => {
-      const state = p.paymentStatus === 'Successful' ? statusOf(p) : p.paymentStatus;
-      const actions = p.paymentStatus === 'Successful'
+      const state = p.orderStatus==='Cancelled'?'Order Cancelled':p.paymentStatus === 'Successful' ? statusOf(p) : p.paymentStatus;
+      const actions = p.paymentStatus === 'Successful' && p.orderStatus!=='Cancelled'
         ? '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Cancelled" data-payment-id="' + esc(p.rawId) + '">Void</button> ' +
           '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Refunded" data-payment-id="' + esc(p.rawId) + '">Refund</button>'
         : '—';
-      return `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(p.date)}</td><td>${statusBadge(state)}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.id)}">View Slip</button> ${actions}</td></tr>`;
+      return `<tr><td>${esc(p.slipId)}</td><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(p.date)}</td><td>${statusBadge(state)}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.slipId)}">View Slip</button> ${actions}</td></tr>`;
     }).join('');
     $('paymentEmpty').hidden = rows.length > 0;
     $('paymentEmpty').textContent = payments.length ? 'No payments match your search or filter.' : 'No payment records yet.';
@@ -95,27 +102,26 @@
     $('paymentPagination').innerHTML = rows.length > pageSize ? Array.from({length:pages},(_,i)=>`<button type="button" class="btn btn-outline btn-sm" data-page="${i+1}" ${i+1===page ? 'aria-current="page"' : ''}>${i+1}</button>`).join('') : '';
   }
   function renderSlip() {
-    const p = payments.find(item => item.id === chosenSlip);
-    $('slipEmpty').hidden = !!p;
-    $('slipDetails').hidden = !p;
-    $('printSlip').disabled = !p || p.paymentStatus !== 'Successful';
-    if (!p) return;
-    $('slipCustomer').textContent = p.customer;
-    $('slipOrder').textContent = p.orderId + ' · ' + p.id;
-    $('slipDate').textContent = p.date;
-    $('slipReference').textContent = p.reference || '—';
-    $('slipTotal').textContent = peso(p.total);
-    $('slipPaid').textContent = peso(p.amount);
-    $('slipBalance').textContent = peso(p.balanceAfter);
-    $('slipNote').textContent = p.paymentStatus === 'Refunded' ? 'This payment was fully refunded and is excluded from sales.' :
-      p.paymentStatus === 'Cancelled' ? 'This payment was voided and is excluded from sales.' :
-      p.balanceAfter <= 0 ? 'Order balance fully paid.' : 'Partial payment. Remaining balance: ' + peso(p.balanceAfter);
-    if ($('slipDisclaimer')) $('slipDisclaimer').hidden = true;
+    const o=orders.find(x=>x.slipId===chosenSlip);
+    $('slipEmpty').hidden=!!o;$('slipDetails').hidden=!o;$('printSlip').disabled=!o;
+    if(!o)return;
+    const history=payments.filter(p=>p.slipId===o.slipId).slice().reverse();
+    $('slipCustomer').textContent=o.customer+' · '+o.customerId;
+    $('slipOrder').textContent=o.id+' · '+o.slipId;
+    $('slipDate').textContent=o.date;$('slipReference').textContent=history.length+' transaction(s)';
+    $('slipTotal').textContent=peso(o.total);$('slipPaid').textContent=peso(o.paid);
+    $('slipBalance').textContent=peso(o.status==='Cancelled'?0:o.balance);
+    $('slipNote').textContent=o.status==='Cancelled'?'Cancelled order · Refund recorded: '+peso(o.refund)+' · No outstanding amount due.':o.balance<=0?'Fully paid':o.paid>0?'Downpayment received':'Pending payment';
+    $('slipTransactions').innerHTML=history.map(p=>'<tr><td>'+esc(p.id)+'</td><td>'+esc(p.paymentStatus==='Successful'?(p.status==='Fully Paid'?'Full Payment':'Downpayment'):p.paymentStatus)+'</td><td>'+esc(p.date)+'</td><td>'+esc(p.method+' / '+(p.reference||'—'))+'</td><td>'+peso(p.amount)+'</td></tr>').join('');
+    if(!history.length)$('slipTransactions').innerHTML='<tr><td colspan="5">No payments yet.</td></tr>';
+    if($('slipDisclaimer'))$('slipDisclaimer').hidden=true;
   }
   function updateReference() {
-    $('referenceRequired').hidden = false;
-    $('paymentReference').required = true;
-    $('paymentReference').placeholder = 'GCash / bank reference';
+    const m=methods.find(x=>x.name===$('paymentMethod').value);
+    const required=!!m&&Number(m.requiresReference)===1;
+    $('referenceRequired').hidden=!required;
+    $('paymentReference').required=required;
+    $('paymentReference').placeholder=required?'Transaction reference':'Optional reference';
   }
   function validate() {
     const order = orderFor($('paymentOrder').value);
@@ -124,11 +130,11 @@
     if (!/^\d{1,9}(?:\.\d{1,2})?$/.test(amountText) || cents(amountText) < 1) throw new Error('Enter a positive payment amount with at most two decimals.');
     if (cents(amountText) > balance(order)) throw new Error('Payment exceeds the remaining balance of ' + peso(order.balance) + '.');
     const method = $('paymentMethod').value;
-    if (!['GCash','Bank Transfer'].includes(method)) throw new Error('Select a valid method.');
+    const methodConfig=methods.find(m=>m.name===method);if(!methodConfig)throw new Error('Select a valid method.');
     const date = $('paymentDate').value;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today() || date < order.date) throw new Error('Payment date must be between order date and today.');
     const reference = $('paymentReference').value.trim();
-    if (!reference) throw new Error('GCash and bank transfers require a reference.');
+    if (!reference && Number(methodConfig.requiresReference)===1) throw new Error('This method requires a reference.');
     if (reference.length > 80) throw new Error('Reference must be 80 characters or fewer.');
     return {action:'record_payment', orderId:order.rawId, amount:amountText, method, date, reference, requestKey};
   }
@@ -160,6 +166,12 @@
     if(b){chosenSlip=b.dataset.slip;renderSlip();Sakura.openModal('paymentSlipModal');}
   });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
+  $('viewOrderSlip').addEventListener('click',()=>{chosenSlip=$('paymentSlipOrder').value;renderSlip();Sakura.openModal('paymentSlipModal');});
+  $('addPaymentMethod').addEventListener('click',async()=>{
+    if(busy)return;const name=window.prompt('New payment method name:');if(name===null||!name.trim())return;
+    const required=window.confirm('Does this payment method require a reference number? OK = Yes, Cancel = No.');
+    busy=true;try{await request('POST',{action:'add_method',name:name.trim(),requiresReference:required});await refresh();$('paymentMethod').value=name.trim();updateReference();notify('Payment method added.');}catch(e){setError(e.message);}finally{busy=false;renderOrderOptions();}
+  });
   $('paymentOrder').addEventListener('change', updateBalanceHint);
   $('paymentMethod').addEventListener('change',updateReference);
   $('recordPaymentShortcut').addEventListener('click',()=>{setError('');Sakura.openModal('recordPaymentModal');});
@@ -179,7 +191,7 @@
       $('paymentDate').value=today();
       updateReference();
       $('paymentSearch').value='';$('paymentFilter').value='all';page=1;
-      await refresh(result.paymentId);
+      await refresh(result.slipId || result.paymentId);
       Sakura.closeModal('recordPaymentModal');
       Sakura.openModal('paymentSlipModal');
       notify(result.message || 'Payment saved successfully.');
