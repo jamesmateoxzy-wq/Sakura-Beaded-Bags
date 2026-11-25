@@ -74,7 +74,7 @@ if (!in_array($method, ['GET', 'POST'], true)) {
 function ord_get(PDO $pdo): void {
     $products = [];
     $stmt = $pdo->query('SELECT p.product_id, p.sku, p.product_name, p.selling_price, p.labor_cost,
-            p.packaging_cost, p.other_cost, p.down_payment_percent,
+            p.packaging_cost, p.other_cost, p.down_payment_percent, p.markup_percent,
             c.category_name, v.material_cost, v.total_cost
         FROM products p
         LEFT JOIN product_categories c ON c.category_id = p.category_id
@@ -95,7 +95,7 @@ function ord_get(PDO $pdo): void {
             'labor' => (float) $row['labor_cost'], 'packaging' => (float) $row['packaging_cost'],
             'otherCost' => (float) $row['other_cost'], 'unitCost' => (float) $row['total_cost'],
             'materialCost' => (float) $row['material_cost'],
-            'downPaymentPercent' => (float) $row['down_payment_percent'],
+            'downPaymentPercent' => (float) $row['down_payment_percent'], 'markup' => (float)$row['markup_percent'],
             'materials' => [],
         ];
     }
@@ -113,6 +113,10 @@ function ord_get(PDO $pdo): void {
         ];
     }
 
+    $catalog = [];
+    foreach ($pdo->query('SELECT material_id, material_name, unit, unit_cost, quantity_on_hand FROM materials WHERE is_active=1 ORDER BY material_name, material_id')->fetchAll() as $m) {
+        $catalog[] = ['id'=>sprintf('MAT-%03d',(int)$m['material_id']), 'name'=>$m['material_name'], 'unit'=>$m['unit'], 'cost'=>(float)$m['unit_cost'], 'stock'=>(float)$m['quantity_on_hand']];
+    }
     $orders = [];
     $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
@@ -125,7 +129,7 @@ function ord_get(PDO $pdo): void {
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
         $orders[$id] = [
-            'id' => sprintf('ORD-%03d', $id), 'rawId' => $id,
+            'id' => sprintf('ORD-%03d', $id), 'rawId' => $id, 'paymentSlipId' => sprintf('SLP-%03d', $id),
             'customer' => $r['full_name'], 'customerId' => sprintf('CUST-%03d', (int) $r['customer_id']),
             'address' => (string) ($r['delivery_address'] ?? ''), 'phone' => (string) ($r['phone'] ?? ''),
             'timestamp' => (string) $r['order_date'],
@@ -185,7 +189,7 @@ function ord_get(PDO $pdo): void {
         }
     }
     ord_out([
-        'ok' => true, 'products' => array_values($products), 'orders' => array_values($orders),
+        'ok' => true, 'products' => array_values($products), 'materialCatalog' => $catalog, 'orders' => array_values($orders),
         'counts' => ['products' => count($products), 'orders' => count($orders)],
         'csrf' => ord_csrf(),
         'stockPolicy' => 'Material quantities are deducted only when production starts. Pending orders do not reserve stock.',
@@ -221,7 +225,7 @@ function ord_create(PDO $pdo, array $data): array {
             'message' => 'This order was already saved. No duplicate order was created.', 'duplicate' => true];
     }
 
-    $stmt = $pdo->prepare('SELECT product_id, product_name, selling_price, labor_cost, packaging_cost, other_cost, is_active
+    $stmt = $pdo->prepare('SELECT product_id, product_name, selling_price, labor_cost, packaging_cost, other_cost, markup_percent, is_active
         FROM products WHERE product_id = ? FOR UPDATE');
     $stmt->execute([$productId]);
     $product = $stmt->fetch();
@@ -233,6 +237,24 @@ function ord_create(PDO $pdo, array $data): array {
     $stmt->execute([$productId]);
     $recipe = $stmt->fetchAll();
     if (!$recipe) throw new InvalidArgumentException('This product has no material recipe. Set it up in Products first.');
+    $baseline = [];
+    foreach ($recipe as $item) $baseline[(int)$item['material_id']] = number_format((float)$item['quantity_required'], 2, '.', '');
+    $chosen = $baseline;
+    if (array_key_exists('recipe', $data)) {
+        if (!is_array($data['recipe']) || count($data['recipe']) < 1 || count($data['recipe']) > 100) throw new InvalidArgumentException('Choose 1 to 100 materials.');
+        $chosen = [];
+        foreach ($data['recipe'] as $entry) {
+            if (!is_array($entry)) throw new InvalidArgumentException('Invalid recipe entry.');
+            $mid = ord_id($entry['materialId'] ?? null, 'material');
+            $raw = $entry['qty'] ?? null;
+            if ((!is_string($raw) && !is_int($raw) && !is_float($raw)) || !preg_match('/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/D', (string)$raw) || (float)$raw < 0.01 || (float)$raw > 1000000 || isset($chosen[$mid])) throw new InvalidArgumentException('Invalid or duplicate material quantity.');
+            $chosen[$mid] = number_format((float)$raw, 2, '.', '');
+        }
+    }
+    ksort($baseline, SORT_NUMERIC); ksort($chosen, SORT_NUMERIC);
+    $customized = $chosen !== $baseline;
+    $recipe = [];
+    foreach ($chosen as $mid=>$amount) $recipe[] = ['material_id'=>$mid,'quantity_required'=>$amount];
     $materials = [];
     $materialsCost = 0.0;
     $lock = $pdo->prepare('SELECT material_id, material_name, unit_cost, quantity_on_hand, is_active FROM materials
@@ -248,19 +270,28 @@ function ord_create(PDO $pdo, array $data): array {
         if ($perBag <= 0 || $needed <= 0 || $needed > 1000000) {
             throw new InvalidArgumentException('Recipe quantity is invalid for this order size.');
         }
-        $materialsCost += $perBag * (float) $mat['unit_cost'];
+        $materialsCost += round($perBag * (float) $mat['unit_cost'], 2);
         $materials[] = ['id' => $mid, 'qty' => number_format($needed, 2, '.', ''), 'cost' => $mat['unit_cost']];
     }
     $materialSnapshot = round($materialsCost, 2);
     $laborSnapshot = round((float)$product['labor_cost'], 2);
     $otherSnapshot = round((float)$product['packaging_cost'] + (float)$product['other_cost'], 2);
     $unitCost = round($materialSnapshot + $laborSnapshot + $otherSnapshot, 2);
-    $unitPrice = number_format((float) $product['selling_price'], 2, '.', '');
+    $price = $customized ? round($unitCost * (1 + (float)$product['markup_percent']/100), 2) : (float)$product['selling_price'];
+    if ($price <= 0 || $price > 100000000 || !is_finite($price)) throw new InvalidArgumentException('Customized selling price is invalid.');
+    $unitPrice = number_format($price, 2, '.', '');
     $unitCostStr = number_format($unitCost, 2, '.', '');
 
-    $stmt = $pdo->prepare('INSERT INTO customers (full_name, delivery_address, phone) VALUES (?, ?, ?)');
-    $stmt->execute([$customer, $address, $phone]);
-    $customerId = (int) $pdo->lastInsertId();
+    // Reuse an existing customer only when both name and normalized phone match.
+    $phone = preg_replace('/[^0-9+]/', '', $phone);
+    $find = $pdo->prepare('SELECT customer_id FROM customers WHERE LOWER(TRIM(full_name))=LOWER(TRIM(?)) AND phone=? ORDER BY customer_id LIMIT 1');
+    $find->execute([$customer,$phone]);
+    $customerId = (int)$find->fetchColumn();
+    if (!$customerId) {
+        $stmt = $pdo->prepare('INSERT INTO customers (full_name, delivery_address, phone) VALUES (?, ?, ?)');
+        $stmt->execute([$customer, $address, $phone]);
+        $customerId = (int)$pdo->lastInsertId();
+    }
     $stmt = $pdo->prepare("INSERT INTO customer_orders
             (customer_id, due_date, production_status, delivery_status, delivery_address, notes)
         VALUES (?, ?, 'Pending', 'Not Scheduled', ?, ?)");
