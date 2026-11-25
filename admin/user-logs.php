@@ -26,9 +26,9 @@ require_once __DIR__ . '/../includes/header.php';
 ?>
 <section class="card">
   <div class="card-head"><div><h2>Account Activity</h2><p class="card-sub">Latest 200 matching login and logout events · Philippine time (UTC+8)</p></div></div>
-  <form method="get" action="user-logs.php" class="form-row">
+  <form method="get" action="user-logs.php" class="user-logs-filter">
     <div class="field"><label for="logSearch">Search administrator</label><input class="input" name="q" id="logSearch" maxlength="180" value="<?= e($search) ?>" placeholder="Name or email"></div>
-    <div class="form-actions"><button class="btn btn-primary" type="submit">Search</button><a class="btn btn-outline" href="user-logs.php">Clear</a></div>
+    <div class="user-logs-filter-actions"><button class="btn btn-primary" type="submit">Search</button><a class="btn btn-outline" href="user-logs.php">Clear</a></div>
   </form>
   <?php if ($error): ?><p role="alert"><?= e($error) ?></p><?php else: ?>
   <div class="table-wrap" style="overflow-x:auto"><table class="table">
