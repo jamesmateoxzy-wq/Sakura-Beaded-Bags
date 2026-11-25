@@ -121,10 +121,10 @@
     $('ordUnitPrice').textContent = money(price);
     $('ordTotalPrice').textContent = money(price * qty);
     $('ordDownpayment').textContent = money(price * qty * dpPercent / 100);
-    $('ordFifoNote').textContent = 'Recipe from Products · inventory allocated on submission';
+    $('ordFifoNote').textContent = 'Recipe from Products · inventory deducted when production starts';
     if (!p || !p.materials.length) return;
     var short = p.materials.find(function (m) { return Number(m.qty) * qty > Number(m.stock) + 0.00001; });
-    if (short) warn('Not enough ' + short.name + ': requires ' + (Number(short.qty) * qty).toFixed(2) +
+    if (short) warn('Stock warning: not enough ' + short.name + ': requires ' + (Number(short.qty) * qty).toFixed(2) +
       ' ' + short.unit + ', currently ' + Number(short.stock).toFixed(2) + ' available.');
     else warn('');
   }
@@ -133,6 +133,7 @@
     $('ordId').value = orderNumber(orders.reduce(function (max, o) { return Math.max(max, Number(o.rawId) || 0); }, 0) + 1) + ' (preview)';
     $('ordCustomer').value = '';
     $('ordAddress').value = '';
+    $('ordPhone').value = '';
     $('ordNotes').value = '';
     $('ordQty').value = '1';
     $('ordDueDate').value = '';
@@ -200,8 +201,8 @@
     $('ordDetailId').value = o.rawId;
     $('ordDetailCode').textContent = o.id + ' · ' + o.customerId;
     $('ordDetailCustomer').textContent = o.customer;
-    $('ordDetailAddress').textContent = o.address || 'Address not provided';
-    $('ordDetailDate').textContent = dateText(o.date);
+    $('ordDetailAddress').textContent = (o.address || 'Address not provided') + (o.phone ? ' · ' + o.phone : '');
+    $('ordDetailDate').textContent = o.timestamp || dateText(o.date);
     $('ordDetailDueDate').textContent = dateText(o.dueDate || o.date);
     $('ordDetailProduct').textContent = itemSummary(o);
     $('ordDetailItemPrice').textContent = money(o.total);
@@ -277,7 +278,7 @@
     var note = isShip ? 'Production is complete. Shipping does not change inventory or payments.' : isDelivery && Number(before.balance) > 0
       ? 'Outstanding balance: ' + money(before.balance) + '. Record full payment before marking this order delivered.'
       : isDelivery ? 'Full payment is recorded. You can mark this order delivered.'
-      : isCancel && before.status === 'Pending' ? 'Reserved materials will be returned to inventory. Paid orders cannot be cancelled.'
+      : isCancel && before.status === 'Pending' ? 'Pending V2 orders have no stock deduction. Paid orders cannot be cancelled yet.'
       : isCancel ? 'Materials already used in production will remain deducted. Paid orders cannot be cancelled.'
       : '';
     $('ordStatusConfirmNote').textContent = note;
@@ -412,14 +413,12 @@
     var qty = orderQty();
     var date = dueDateISO($('ordDueDate').value);
     if (!p || !Number.isInteger(qty) || qty < 1 || qty > 1000 || !date ||
-        !$('ordCustomer').value.trim() || !$('ordAddress').value.trim()) {
+        !$('ordCustomer').value.trim() || !$('ordAddress').value.trim() || !$('ordPhone').value.trim()) {
       warn('Complete all required fields. Use a valid delivery date and a quantity from 1 to 1,000.'); return;
     }
-    var short = p.materials.find(function (m) { return m.qty * qty > m.stock + 0.00001; });
-    if (short) { warn('Not enough ' + short.name + ' in inventory.'); return; }
     var payload = {
       action:'create_order', customer:$('ordCustomer').value.trim(),
-      address:$('ordAddress').value.trim(), productId:p.id, quantity:qty,
+      address:$('ordAddress').value.trim(), phone:$('ordPhone').value.trim(), productId:p.id, quantity:qty,
       dueDate:date, notes:$('ordNotes').value.trim(), requestKey:requestKey
     };
     busy = true; if (submitButton) submitButton.disabled = true;
