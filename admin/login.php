@@ -14,10 +14,15 @@ require_once __DIR__ . '/../includes/config.php';
 if (!empty($_SESSION['user_id'])) { header('Location: dashboard.php'); exit; }
 
 // DEMO ONLY (DEMO_MODE in config.php): lets you preview the system before Google is set up
-if (DEMO_MODE && isset($_GET['demo'])) {
+$demoHost = strtolower(explode(':',(string)($_SERVER['HTTP_HOST']??''))[0]);
+$demoLocal = in_array($_SERVER['REMOTE_ADDR']??'', ['127.0.0.1','::1'],true) && in_array($demoHost,['127.0.0.1','localhost'],true);
+if (DEMO_MODE && $demoLocal && isset($_GET['demo'])) {
+    session_regenerate_id(true);
     $_SESSION['user_id']   = 'demo';
     $_SESSION['user_name'] = 'Sakura Admin';
     $_SESSION['user_role'] = 'Admin';
+    require_once __DIR__ . '/../includes/user_activity.php';
+    sbb_log_user_activity('Login');
     header('Location: dashboard.php');
     exit;
 }
