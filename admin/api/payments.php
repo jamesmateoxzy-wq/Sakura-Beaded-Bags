@@ -68,16 +68,17 @@ if (!in_array($method, ['GET','POST'], true)) {
 
 function pay_read(PDO $pdo): void {
     $rows = $pdo->query("SELECT o.order_id, o.order_date, o.due_date, o.production_status, o.archived_at,
-        c.full_name, b.order_total, b.amount_paid, b.balance_due, b.payment_status
+        c.full_name, c.customer_id, b.order_total, b.amount_paid, b.balance_due, b.payment_status, COALESCE(rf.refund_amount,0) AS refund_amount
         FROM customer_orders o JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
+        LEFT JOIN order_refunds rf ON rf.order_id=o.order_id
         ORDER BY o.order_id DESC")->fetchAll(PDO::FETCH_ASSOC);
     $orders = []; $byOrder = [];
     $sales = 0; $received = 0; $outstanding = 0; $orderValue = 0;
     foreach ($rows as $r) {
         $id = (int)$r['order_id'];
         $item = [
-            'id' => pay_code($id, 'ORD'), 'rawId' => $id, 'customer' => (string)$r['full_name'],
+            'id' => pay_code($id, 'ORD'), 'slipId' => pay_code($id,'SLP'), 'rawId' => $id, 'customer' => (string)$r['full_name'], 'customerId'=>pay_code((int)$r['customer_id'],'CUST'), 'refund'=>(float)$r['refund_amount'],
             'date' => substr((string)$r['order_date'], 0, 10), 'dueDate' => (string)($r['due_date'] ?? ''),
             'total' => (float)$r['order_total'], 'paid' => (float)$r['amount_paid'],
             'balance' => (float)$r['balance_due'], 'status' => (string)$r['production_status'],
@@ -99,12 +100,12 @@ function pay_read(PDO $pdo): void {
         if (!isset($byOrder[$oid])) continue;
         $order = $byOrder[$oid];
         $paymentStatus = (string)$r['payment_status'];
-        if ($paymentStatus === 'Successful' && $order['status'] !== 'Cancelled') {
+        if ($paymentStatus === 'Successful') {
             $running[$oid] = ($running[$oid] ?? 0) + pay_cents($r['amount']);
         }
         $balanceAfter = max(0, pay_cents($order['total']) - ($running[$oid] ?? 0));
         $payments[] = [
-            'id' => pay_code((int)$r['payment_id'],'SLP'), 'rawId' => (int)$r['payment_id'],
+            'id' => pay_code((int)$r['payment_id'],'TXN'), 'slipId'=>$order['slipId'], 'rawId' => (int)$r['payment_id'], 'orderStatus'=>$order['status'],
             'orderId' => $order['id'], 'customer' => $order['customer'],
             'total' => $order['total'], 'orderPaid' => $order['paid'],
             'amount' => (float)$r['amount'], 'balanceAfter' => $balanceAfter / 100,
@@ -112,12 +113,13 @@ function pay_read(PDO $pdo): void {
             'reference' => (string)($r['reference_number'] ?? ''),
             'date' => substr((string)$r['payment_date'], 0, 10),
             'paymentStatus' => $paymentStatus,
-            'status' => $balanceAfter === 0 ? 'Fully Paid' : 'Partial',
+            'status' => $balanceAfter === 0 ? 'Fully Paid' : 'Downpayment',
         ];
     }
     usort($payments, static fn($a,$b) => $b['rawId'] <=> $a['rawId']);
     pay_out([
         'ok' => true, 'csrf' => pay_csrf(), 'orders' => $orders, 'payments' => $payments,
+        'methods'=>$pdo->query("SELECT method_name AS name,requires_reference AS requiresReference FROM payment_methods ORDER BY (method_name='GCash') DESC,method_name")->fetchAll(),
         'summary' => [
             'totalSales' => $sales / 100, 'received' => $received / 100,
             'orderValue' => $orderValue / 100,
@@ -134,13 +136,15 @@ function pay_create(PDO $pdo, array $data): array {
     $amount = pay_amount($data['amount'] ?? null);
     $date = pay_date($data['date'] ?? null);
     $method = $data['method'] ?? null;
-    if (!is_string($method) || !in_array($method, ['GCash','Bank Transfer'], true)) {
-        throw new InvalidArgumentException('Select a valid payment method.');
-    }
+    if (!is_string($method)) throw new InvalidArgumentException('Select a valid payment method.');
+    $methodStmt=$pdo->prepare('SELECT method_name,requires_reference FROM payment_methods WHERE method_name=?');
+    $methodStmt->execute([$method]);$methodRow=$methodStmt->fetch();
+    if(!$methodRow)throw new InvalidArgumentException('Select a valid payment method.');
+    $method=$methodRow['method_name'];
     $reference = $data['reference'] ?? '';
     if (!is_string($reference) || strlen(trim($reference)) > 80) throw new InvalidArgumentException('Reference is limited to 80 characters.');
     $reference = trim($reference);
-    if ($reference === '') throw new InvalidArgumentException('GCash and bank transfers require a reference.');
+    if ($reference === '' && (int)$methodRow['requires_reference']) throw new InvalidArgumentException('This payment method requires a reference.');
     $key = pay_key($data['requestKey'] ?? null);
 
     $pdo->beginTransaction();
@@ -152,7 +156,7 @@ function pay_create(PDO $pdo, array $data): array {
         $existing = $lookup->fetchColumn();
         if (!$existing) throw new RuntimeException('Payment request still processing. Refresh the page.');
         $pdo->commit();
-        return ['ok' => true, 'paymentId' => pay_code((int)$existing, 'SLP'),
+        return ['ok' => true, 'paymentId' => pay_code((int)$existing, 'TXN'),
             'message' => 'Payment was already saved. No second payment recorded.', 'duplicate' => true];
     }
     // Lock the order BEFORE calculating balance; serializes concurrent payments for the same order.
@@ -188,7 +192,7 @@ function pay_create(PDO $pdo, array $data): array {
     $mark = $pdo->prepare('UPDATE payment_submission_keys SET payment_id = ? WHERE request_key = ?');
     $mark->execute([$paymentId, $key]);
     $pdo->commit();
-    return ['ok' => true, 'paymentId' => pay_code($paymentId,'SLP'), 'duplicate' => false,
+    return ['ok' => true, 'paymentId' => pay_code($paymentId,'TXN'), 'slipId'=>pay_code($orderId,'SLP'), 'duplicate' => false,
         'balance' => ($total - $paid - $cents) / 100, 'message' => 'Payment saved successfully.'];
 }
 
@@ -205,16 +209,18 @@ function pay_update_status(PDO $pdo, array $data): array {
     $orderId = $findOrder->fetchColumn();
     if ($orderId === false) throw new InvalidArgumentException('Payment was not found.');
 
-    $lockOrder = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $lockOrder = $pdo->prepare('SELECT production_status,delivery_status FROM customer_orders WHERE order_id = ? FOR UPDATE');
     $lockOrder->execute([(int)$orderId]);
-    if (!$lockOrder->fetchColumn()) throw new InvalidArgumentException('The payment order was not found.');
+    $order=$lockOrder->fetch();
+    if (!$order) throw new InvalidArgumentException('The payment order was not found.');
+    if ($order['production_status']==='Cancelled'||$order['delivery_status']==='Delivered') throw new InvalidArgumentException('Settled order payments are read-only.');
 
     $lockPayment = $pdo->prepare('SELECT payment_status FROM payments WHERE payment_id = ? FOR UPDATE');
     $lockPayment->execute([$paymentId]);
     $currentStatus = $lockPayment->fetchColumn();
     if ($currentStatus === $status) {
         $pdo->commit();
-        return ['ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+        return ['ok' => true, 'paymentId' => pay_code($paymentId, 'TXN'),
             'message' => 'Payment is already marked ' . strtolower($status) . '.'];
     }
     if ($currentStatus !== 'Successful') {
@@ -229,7 +235,7 @@ function pay_update_status(PDO $pdo, array $data): array {
     $update->execute([$status, $note, $paymentId]);
     $pdo->commit();
 
-    return ['ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+    return ['ok' => true, 'paymentId' => pay_code($paymentId, 'TXN'),
         'message' => 'Payment marked ' . strtolower($status) . '. Sales and order balances were recalculated.'];
 }
 
@@ -243,6 +249,12 @@ try {
     if (!is_string($raw) || strlen($raw) > 16384) pay_fail('Request too large.');
     $input = json_decode($raw, true);
     if (!is_array($input)) pay_fail('Invalid JSON.');
+    if (($input['action'] ?? '') === 'add_method') {
+        $name=$input['name']??null;
+        if (!is_string($name)||trim($name)===''||strlen(trim($name))>80||!is_bool($input['requiresReference']??null)) throw new InvalidArgumentException('Invalid payment method.');
+        $pdo->prepare('INSERT INTO payment_methods (method_name,requires_reference) VALUES (?,?)')->execute([trim($name),$input['requiresReference']?1:0]);
+        pay_out(['ok'=>true,'message'=>'Payment method added.'],201);
+    }
     if (($input['action'] ?? '') === 'record_payment') pay_out(pay_create($pdo, $input), 201);
     if (($input['action'] ?? '') === 'update_payment_status') pay_out(pay_update_status($pdo, $input));
     pay_fail('Unknown action.');
