@@ -119,7 +119,7 @@ function pay_read(PDO $pdo): void {
     usort($payments, static fn($a,$b) => $b['rawId'] <=> $a['rawId']);
     pay_out([
         'ok' => true, 'csrf' => pay_csrf(), 'orders' => $orders, 'payments' => $payments,
-        'methods'=>$pdo->query("SELECT method_name AS name,requires_reference AS requiresReference FROM payment_methods ORDER BY (method_name='GCash') DESC,method_name")->fetchAll(),
+        'methods'=>$pdo->query("SELECT method_name AS name,requires_reference AS requiresReference FROM payment_methods WHERE method_name IN ('GCash','Bank Transfer','Other') ORDER BY (method_name='GCash') DESC,method_name")->fetchAll(),
         'summary' => [
             'totalSales' => $sales / 100, 'received' => $received / 100,
             'orderValue' => $orderValue / 100,
@@ -136,7 +136,7 @@ function pay_create(PDO $pdo, array $data): array {
     $amount = pay_amount($data['amount'] ?? null);
     $date = pay_date($data['date'] ?? null);
     $method = $data['method'] ?? null;
-    if (!is_string($method)) throw new InvalidArgumentException('Select a valid payment method.');
+    if (!is_string($method) || !in_array($method,['GCash','Bank Transfer','Other'],true)) throw new InvalidArgumentException('Select a valid payment method.');
     $methodStmt=$pdo->prepare('SELECT method_name,requires_reference FROM payment_methods WHERE method_name=?');
     $methodStmt->execute([$method]);$methodRow=$methodStmt->fetch();
     if(!$methodRow)throw new InvalidArgumentException('Select a valid payment method.');
@@ -249,12 +249,6 @@ try {
     if (!is_string($raw) || strlen($raw) > 16384) pay_fail('Request too large.');
     $input = json_decode($raw, true);
     if (!is_array($input)) pay_fail('Invalid JSON.');
-    if (($input['action'] ?? '') === 'add_method') {
-        $name=$input['name']??null;
-        if (!is_string($name)||trim($name)===''||strlen(trim($name))>80||!is_bool($input['requiresReference']??null)) throw new InvalidArgumentException('Invalid payment method.');
-        $pdo->prepare('INSERT INTO payment_methods (method_name,requires_reference) VALUES (?,?)')->execute([trim($name),$input['requiresReference']?1:0]);
-        pay_out(['ok'=>true,'message'=>'Payment method added.'],201);
-    }
     if (($input['action'] ?? '') === 'record_payment') pay_out(pay_create($pdo, $input), 201);
     if (($input['action'] ?? '') === 'update_payment_status') pay_out(pay_update_status($pdo, $input));
     pay_fail('Unknown action.');
