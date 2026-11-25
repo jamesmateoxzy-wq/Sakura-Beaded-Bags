@@ -161,7 +161,7 @@ function prod_catalog(PDO $pdo): array {
         ];
     }
     $rows = $pdo->query('SELECT p.product_id, p.sku, p.product_name, p.category_id, c.category_name,
-            p.image_path, p.labor_cost, p.packaging_cost, p.other_cost, p.markup_percent, p.selling_price, p.down_payment_percent
+            p.image_path, p.labor_cost, p.packaging_cost, p.other_cost, p.markup_percent, p.selling_price, p.down_payment_percent, p.pricing_method
             FROM products p LEFT JOIN product_categories c ON c.category_id = p.category_id
             WHERE p.is_active = 1 ORDER BY p.product_id')->fetchAll();
     $products = array_map(static function (array $r) use ($byProduct): array {
@@ -172,7 +172,7 @@ function prod_catalog(PDO $pdo): array {
             'image' => $r['image_path'],
             'labor' => (float) $r['labor_cost'], 'packaging' => (float) $r['packaging_cost'],
             'otherCost' => (float) $r['other_cost'], 'downPaymentPercent' => (float)$r['down_payment_percent'], 'markup' => (float) $r['markup_percent'],
-            'sellingPrice' => (float) $r['selling_price'], 'materials' => $byProduct[$id] ?? [],
+            'sellingPrice' => (float) $r['selling_price'], 'pricingMethod'=>$r['pricing_method'], 'targetPrice'=>(float)$r['selling_price'], 'materials' => $byProduct[$id] ?? [],
         ];
     }, $rows);
     if (empty($_SESSION['sbb_products_csrf'])) {
@@ -295,7 +295,7 @@ try {
         }
 
         $pdo->beginTransaction();
-        $stmt = $pdo->prepare('SELECT labor_cost, packaging_cost, other_cost, markup_percent
+        $stmt = $pdo->prepare('SELECT labor_cost, packaging_cost, other_cost, markup_percent, selling_price, pricing_method
             FROM products WHERE product_id = ? AND is_active = 1 FOR UPDATE');
         $stmt->execute([$productId]);
         $product = $stmt->fetch();
@@ -316,13 +316,15 @@ try {
             $materialTotal += round((float) $quantity * (float) $material['unit_cost'], 2);
         }
         $total = $materialTotal + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'];
-        $price = round($total * (1 + (float) $product['markup_percent'] / 100), 2);
+        $price = $product['pricing_method']==='target' ? (float)$product['selling_price'] : round($total * (1 + (float)$product['markup_percent']/100),2);
+        $effective = $total>0 ? round(($price/$total-1)*100,2) : 0;
+        if ($price<$total || $effective>999.99) throw new InvalidArgumentException('Target price must cover the revised recipe cost and fit the markup limit. Update pricing first.');
         if ($total <= 0 || $price <= 0 || !is_finite($price) || $price > 100000000) {
             throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
         }
 
-        $pdo->prepare('UPDATE products SET selling_price = ? WHERE product_id = ?')
-            ->execute([prod_money($price), $productId]);
+        $pdo->prepare('UPDATE products SET selling_price = ?, markup_percent = ? WHERE product_id = ?')
+            ->execute([prod_money($price), $product['pricing_method']==='target'?prod_money($effective):$product['markup_percent'], $productId]);
         $pdo->prepare('DELETE FROM product_materials WHERE product_id = ?')->execute([$productId]);
         $insert = $pdo->prepare('INSERT INTO product_materials (product_id, material_id, quantity_required) VALUES (?, ?, ?)');
         foreach ($recipe as $materialId => $quantity) {
@@ -339,7 +341,9 @@ try {
     $packaging = prod_number($body['packaging'] ?? null, 'Packaging cost', 1000000);
     $other = prod_number($body['otherCost'] ?? 0, 'Miscellaneous cost', 1000000);
     $dp = prod_number($body['downPaymentPercent'] ?? 50, 'Downpayment percent', 100);
-    $markup = prod_number($body['markup'] ?? null, 'Markup percent', 999.99);
+    $pricingMethod=$body['pricingMethod']??'markup';
+    if(!in_array($pricingMethod,['markup','target'],true)) throw new InvalidArgumentException('Select a pricing method.');
+    $markup = $pricingMethod==='markup' ? prod_number($body['markup'] ?? null, 'Markup percent', 999.99) : '0.00';
     $materialItems = $body['materials'] ?? null;
     if (!is_array($materialItems) || !prod_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
         throw new InvalidArgumentException('Choose 1 to 100 recipe materials.');
@@ -385,7 +389,13 @@ try {
         $materialTotal += round((float) $qty * (float) $material['unit_cost'], 2);
     }
     $total = $materialTotal + (float) $labor + (float) $packaging + (float)$other;
-    $price = round($total * (1 + (float) $markup / 100), 2);
+    $price = $pricingMethod==='target' ? (float)prod_number($body['targetPrice']??null,'Target selling price',100000000,false) : round($total * (1 + (float)$markup/100),2);
+    if ($pricingMethod==='target') {
+        if ($total<=0 || $price<$total) throw new InvalidArgumentException('Target price must cover production cost.');
+        $effective=round(($price/$total-1)*100,2);
+        if($effective>999.99)throw new InvalidArgumentException('Effective markup exceeds 999.99%.');
+        $markup=prod_money($effective);
+    }
     if ($total <= 0 || $price <= 0 || !is_finite($price) || $price > 100000000) {
         throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
     }
@@ -393,9 +403,9 @@ try {
 
     if ($action === 'add_product') {
         $stmt = $pdo->prepare('INSERT INTO products
-            (product_name, category_id, labor_cost, packaging_cost, other_cost, down_payment_percent, markup_percent, selling_price)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql]);
+            (product_name, category_id, labor_cost, packaging_cost, other_cost, down_payment_percent, markup_percent, selling_price, pricing_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql, $pricingMethod]);
         $productId = (int) $pdo->lastInsertId();
         $letters = substr(preg_replace('/[AEIOU]/', '', preg_replace('/[^A-Z]/', '', strtoupper($name))), 0, 3);
         $prefix = str_pad($letters, 3, 'X');
@@ -404,8 +414,8 @@ try {
         $stmt->execute([$sku, $productId]);
     } else {
         $stmt = $pdo->prepare('UPDATE products SET product_name = ?, category_id = ?, labor_cost = ?,
-            packaging_cost = ?, other_cost = ?, down_payment_percent = ?, markup_percent = ?, selling_price = ? WHERE product_id = ?');
-        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql, $productId]);
+            packaging_cost = ?, other_cost = ?, down_payment_percent = ?, markup_percent = ?, selling_price = ?, pricing_method = ? WHERE product_id = ?');
+        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql, $pricingMethod, $productId]);
         $pdo->prepare('DELETE FROM product_materials WHERE product_id = ?')->execute([$productId]);
     }
     $insert = $pdo->prepare('INSERT INTO product_materials (product_id, material_id, quantity_required) VALUES (?, ?, ?)');
