@@ -11,7 +11,7 @@ try {
         method_name VARCHAR(80) PRIMARY KEY,
         requires_reference TINYINT(1) NOT NULL DEFAULT 1
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("INSERT IGNORE INTO payment_methods (method_name,requires_reference) VALUES ('GCash',1),('Bank Transfer',1),('Cash',0),('Other',1)");
+    $pdo->exec("INSERT IGNORE INTO payment_methods (method_name,requires_reference) VALUES ('GCash',1),('Bank Transfer',1),('Other',1)");
     $type = $pdo->query("SELECT DATA_TYPE FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='payments' AND column_name='payment_method'")->fetchColumn();
     if ($type !== 'varchar') $pdo->exec("ALTER TABLE payments MODIFY payment_method VARCHAR(80) NOT NULL");
     $pdo->exec("INSERT IGNORE INTO payment_methods (method_name,requires_reference) SELECT DISTINCT payment_method,1 FROM payments WHERE payment_method<>''");
