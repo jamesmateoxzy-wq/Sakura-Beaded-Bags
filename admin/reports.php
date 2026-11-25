@@ -15,88 +15,29 @@ $pageJs = 'reports-live.js';
 $pageBodyClass = 'reports-layout';
 require_once __DIR__ . '/../includes/header.php';
 ?>
-<section class="ops-page" id="operationsPage" data-module="reports" data-demo="<?= $isDemo ? '1' : '0' ?>">
+<section class="ops-page" id="operationsPage" data-module="reports">
   <div class="rep-toolbar">
-    <div class="rep-filters">
-      <label class="rep-period-control">
-        <?= icon('calendar') ?>
-        <span class="sr-only">Report date range</span>
-        <select id="repPeriod" aria-label="Report date range"></select>
-      </label>
-      <label class="rep-granularity-control">
-        <span class="sr-only">Chart interval</span>
-        <?= icon('chevron') ?>
-        <select id="repGranularity" aria-label="Chart interval">
-          <option value="monthly" selected>Monthly</option>
-          <option value="quarterly">Quarterly</option>
-          <option value="yearly">Yearly</option>
-        </select>
-      </label>
+    <div class="rep-filters v2-report-filters">
+      <label>Period <select class="select" id="repPeriod"><option value="all">All dates</option><option value="month">Month</option><option value="year">Year</option><option value="range">Date range</option></select></label>
+      <label id="repMonthWrap" hidden>Month <input class="input" id="repMonth" type="month"></label>
+      <label id="repYearWrap" hidden>Year <select class="select" id="repYear"></select></label>
+      <label id="repFromWrap" hidden>From <input class="input" id="repFrom" type="date"></label>
+      <label id="repToWrap" hidden>To <input class="input" id="repTo" type="date"></label>
+      <label>Sales interval <select class="select" id="repGranularity"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly" selected>Monthly</option><option value="yearly">Yearly</option></select></label>
     </div>
     <div class="rep-actions">
-      <button type="button" class="btn rep-export-csv" id="repExport"><?= icon('download') ?><span>Export CSV</span></button>
-      <button type="button" class="btn btn-primary rep-export-pdf" id="repPrint"><?= icon('document') ?><span>Export PDF</span></button>
+      <button type="button" class="btn" id="repExport" disabled>Export CSV</button>
+      <button type="button" class="btn btn-primary" id="repPrint" disabled>Export PDF</button>
     </div>
   </div>
+  <p id="repStatus" role="status" aria-live="polite">Loading financial data…</p>
   <section class="rep-stats" aria-label="Financial report summary">
-    <article class="card rep-stat">
-      <div><span>Revenue</span><?= icon('wallet') ?></div>
-      <strong id="repRevenue">₱0</strong>
-      <small id="repRevenueNote">No revenue recorded</small>
-    </article>
-    <article class="card rep-stat">
-      <div><span>Expenses</span><?= icon('payments') ?></div>
-      <strong id="repExpenses">₱0</strong>
-      <small>Materials, labor &amp; overhead</small>
-    </article>
-    <article class="card rep-stat">
-      <div><span>Net Profit</span><?= icon('reports') ?></div>
-      <strong id="repProfit">₱0</strong>
-      <small id="repProfitNote">0.0% net profit margin</small>
-    </article>
-    <article class="card rep-stat">
-      <div><span>Orders</span><?= icon('orders') ?></div>
-      <strong id="repOrders">0</strong>
-      <small id="repOrderAverage">₱0.00 average order value</small>
-    </article>
+    <article class="card rep-stat"><div><span>Total Sales</span><?= icon('wallet') ?></div><strong id="repRevenue">—</strong><small>Booked orders in period</small></article>
+    <article class="card rep-stat"><div><span>Material Expenses</span><?= icon('inventory') ?></div><strong id="repMaterial">—</strong><small>Saved material cost estimates</small></article>
+    <article class="card rep-stat"><div><span>Labor Expenses</span><?= icon('users') ?></div><strong id="repLabor">—</strong><small>Saved labor cost estimates</small></article>
+    <article class="card rep-stat"><div><span>Gross Profit</span><?= icon('reports') ?></div><strong id="repProfit">—</strong><small>Estimated, before operating expenses</small></article>
   </section>
-  <div class="rep-chart-grid">
-    <section class="card rep-chart-card">
-      <div class="rep-chart-heading">
-        <div><h2 id="repSalesTitle">Monthly Sales</h2><p id="repSalesSubtitle">No sales recorded</p></div>
-        <strong id="repSalesTrend">No trend yet</strong>
-      </div>
-      <div class="rep-chart" id="repBars" role="img" aria-label="Monthly sales chart"></div>
-      <p class="rep-empty" id="repChartEmpty" hidden>No sales in this period.</p>
-    </section>
-    <section class="card rep-chart-card">
-      <div class="rep-chart-heading rep-comparison-heading">
-        <div><h2>Revenue vs Expenses</h2><div class="rep-legend">
-          <span><i class="rep-legend-revenue"></i>Revenue</span><span><i class="rep-legend-expenses"></i>Expenses</span>
-        </div></div>
-      </div>
-      <div class="rep-chart" id="repComparison" role="img" aria-label="Monthly revenue and expenses chart"></div>
-      <p class="rep-empty" id="repComparisonEmpty" hidden>No revenue or expenses recorded.</p>
-    </section>
-  </div>
-  <div class="rep-analysis-grid">
-    <section class="card rep-analysis-card">
-      <div class="rep-analysis-heading"><h2>Profit Analysis</h2><p id="repAnalysisSubtitle">No financial activity recorded.</p></div>
-      <table class="rep-analysis-table">
-        <thead><tr><th>Category</th><th>Amount</th><th>Share of revenue</th></tr></thead>
-        <tbody id="repExpensesTable"></tbody>
-      </table>
-      <p class="rep-empty" id="repExpensesEmpty" hidden>No expense records for this period.</p>
-      <div class="rep-net-profit"><strong>Net Profit</strong><strong id="repNetProfit">₱0 · 0.0%</strong></div>
-    </section>
-    <section class="card rep-glance-card">
-      <h2 id="repGlanceTitle">No activity yet</h2>
-      <div class="rep-margin-row"><span>Net profit margin</span><strong id="repMargin">0.0%</strong></div>
-      <div class="rep-margin-track"><span id="repMarginBar"></span></div>
-      <p id="repGlanceText">No sales or expenses recorded for this period.</p>
-      <small id="repCalculation">Revenue: ₱0 - Expenses: ₱0</small>
-      <small id="repPrepared">No report data yet · Currency: PHP (₱)</small>
-    </section>
-  </div>
+  <p class="v2-report-note">Sales and gross profit are based on non-cancelled orders created in the selected period, using saved selling prices and production costs. Cash-in uses successful payment dates instead. Receivables and payment statuses reflect the current balances of selected orders. These are management estimates, not audited financial statements.</p>
+  <div id="repSections" class="v2-report-grid"></div>
 </section>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
