@@ -251,7 +251,10 @@ function ord_create(PDO $pdo, array $data): array {
         $materialsCost += $perBag * (float) $mat['unit_cost'];
         $materials[] = ['id' => $mid, 'qty' => number_format($needed, 2, '.', ''), 'cost' => $mat['unit_cost']];
     }
-    $unitCost = round($materialsCost + (float) $product['labor_cost'] + (float) $product['packaging_cost'] + (float) $product['other_cost'], 2);
+    $materialSnapshot = round($materialsCost, 2);
+    $laborSnapshot = round((float)$product['labor_cost'], 2);
+    $otherSnapshot = round((float)$product['packaging_cost'] + (float)$product['other_cost'], 2);
+    $unitCost = round($materialSnapshot + $laborSnapshot + $otherSnapshot, 2);
     $unitPrice = number_format((float) $product['selling_price'], 2, '.', '');
     $unitCostStr = number_format($unitCost, 2, '.', '');
 
@@ -264,8 +267,8 @@ function ord_create(PDO $pdo, array $data): array {
     $stmt->execute([$customerId, $dueDate, $address, trim($notes)]);
     $orderId = (int) $pdo->lastInsertId();
     $stmt = $pdo->prepare('INSERT INTO order_items
-        (order_id, product_id, quantity, unit_price, estimated_unit_cost) VALUES (?, ?, ?, ?, ?)');
-    $stmt->execute([$orderId, $productId, $qty, $unitPrice, $unitCostStr]);
+        (order_id, product_id, quantity, unit_price, estimated_unit_cost, material_cost_snapshot, labor_cost_snapshot, other_cost_snapshot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->execute([$orderId, $productId, $qty, $unitPrice, $unitCostStr, $materialSnapshot, $laborSnapshot, $otherSnapshot]);
 
     $snapshot = $pdo->prepare('INSERT INTO order_material_snapshots (order_id, material_id, required_qty, unit_cost) VALUES (?, ?, ?, ?)');
     foreach ($materials as $material) {
