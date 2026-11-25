@@ -11,6 +11,7 @@ try {
         'migrate_v2_inventory_audit.php',
         'migrate_v2_payments.php',
         'migrate_v2_pricing.php',
+        'migrate_v2_user_logs.php',
         'migrate_product_catalog.php',
         'backfill_v2_order_archive.php',
     ];
