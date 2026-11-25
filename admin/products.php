@@ -67,6 +67,7 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="field"><label for="sPackaging">Packaging (₱)</label><input class="input" type="number" min="0" step="0.01" id="sPackaging"></div>
         <div class="field"><label for="sOther">Miscellaneous (₱)</label><input class="input" type="number" min="0" step="0.01" id="sOther" value="0"></div>
         <div class="field"><label for="sDp">Downpayment (%)</label><input class="input" type="number" min="0" max="100" step="0.01" id="sDp" value="50"></div>
+        <div class="field"><label for="sMethod">Pricing method</label><select class="select" id="sMethod"><option value="markup">Markup-based pricing</option><option value="target">Target selling price</option></select></div>
         <div class="field"><label for="sMarkup">Markup on cost (%)</label><input class="input" type="number" min="0" step="0.01" id="sMarkup"></div>
       </div>
 
@@ -185,7 +186,9 @@ require_once __DIR__ . '/../includes/header.php';
         <div class="field"><label for="nPackaging">Packaging (₱) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nPackaging" value="0"></div>
         <div class="field"><label for="nOther">Miscellaneous (₱)</label><input class="input" type="number" min="0" step="0.01" id="nOther" value="0"></div>
         <div class="field"><label for="nDp">Downpayment (%)</label><input class="input" type="number" min="0" max="100" step="0.01" id="nDp" value="50"></div>
+        <div class="field"><label for="nMethod">Pricing method</label><select class="select" id="nMethod"><option value="markup">Markup-based pricing</option><option value="target">Target selling price</option></select></div>
         <div class="field"><label for="nMarkup">Markup on cost (%) <span class="req">*</span></label><input class="input" type="number" min="0" step="0.01" id="nMarkup" value="100"></div>
+        <div class="field"><label for="nTarget">Target selling price (₱)</label><input class="input" type="number" min="0.01" step="0.01" id="nTarget"></div>
       </div>
 
       <div class="summary">
