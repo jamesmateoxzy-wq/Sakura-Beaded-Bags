@@ -64,7 +64,6 @@ require_once __DIR__ . '/../includes/header.php';
     <section class="card pay-transactions" aria-labelledby="transactionsHeading">
         <div class="pay-section-head">
             <h2 id="transactionsHeading">Transactions</h2>
-            <div class="order-control"><select class="select" id="paymentSlipOrder" aria-label="Select order slip"></select><button type="button" class="btn btn-outline btn-sm" id="viewOrderSlip">View Order Slip</button></div>
             <div class="pay-controls">
                 <label class="pay-search">
                     <span class="pay-screenreader">Search slip, order, or customer</span>
