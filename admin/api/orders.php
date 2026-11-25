@@ -315,16 +315,20 @@ function ord_cancel(PDO $pdo, array $data): array {
             GROUP BY material_id ORDER BY material_id");
         $stmt->execute([$orderId]);
         $materials = $stmt->fetchAll();
+        $lockStock = $pdo->prepare('SELECT quantity_on_hand FROM materials WHERE material_id = ? FOR UPDATE');
         $addBack = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?');
         $record = $pdo->prepare("INSERT INTO inventory_movements
-            (material_id, order_id, movement_type, quantity_change, note)
-            VALUES (?, ?, 'Return', ?, 'Restored when pending order was cancelled')");
+            (material_id, order_id, movement_type, quantity_change, note, previous_quantity, resulting_quantity)
+            VALUES (?, ?, 'Return', ?, 'Restored when pending order was cancelled', ?, ?)");
         foreach ($materials as $r) {
             $qty = number_format((float) $r['used_qty'], 2, '.', '');
             if ((float) $qty <= 0) continue;
+            $lockStock->execute([(int)$r['material_id']]);
+            $before = $lockStock->fetchColumn();
+            if ($before === false) throw new RuntimeException('Material not found.');
             $addBack->execute([$qty, (int) $r['material_id']]);
             if ($addBack->rowCount() !== 1) throw new RuntimeException('Could not restore material stock.');
-            $record->execute([(int) $r['material_id'], $orderId, $qty]);
+            $record->execute([(int)$r['material_id'], $orderId, $qty, $before, round((float)$before + (float)$qty, 2)]);
         }
     }
     $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled', archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP) WHERE order_id = ?");
@@ -386,8 +390,8 @@ function ord_advance(PDO $pdo, array $data): array {
         if (!$recipe) throw new InvalidArgumentException('Order has no V2 material snapshot. Review legacy stock before starting production.');
         $lock = $pdo->prepare('SELECT material_name, quantity_on_hand, is_active FROM materials WHERE material_id = ? FOR UPDATE');
         $decrement = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand - ? WHERE material_id = ? AND quantity_on_hand >= ?');
-        $movement = $pdo->prepare("INSERT INTO inventory_movements (material_id, order_id, movement_type, quantity_change, note)
-            VALUES (?, ?, 'Production Use', ?, 'Deducted when production started')");
+        $movement = $pdo->prepare("INSERT INTO inventory_movements (material_id, order_id, movement_type, quantity_change, note, previous_quantity, resulting_quantity)
+            VALUES (?, ?, 'Production Use', ?, 'Deducted when production started', ?, ?)");
         foreach ($recipe as $item) {
             $mid = (int)$item['material_id'];
             $qty = (string)$item['required_qty'];
@@ -397,7 +401,7 @@ function ord_advance(PDO $pdo, array $data): array {
             if ((float)$material['quantity_on_hand'] < (float)$qty) throw new InvalidArgumentException('Insufficient stock for ' . $material['material_name'] . '. Replenish inventory first.');
             $decrement->execute([$qty, $mid, $qty]);
             if ($decrement->rowCount() !== 1) throw new RuntimeException('Stock changed; retry production.');
-            $movement->execute([$mid, $orderId, '-' . $qty]);
+            $movement->execute([$mid, $orderId, '-' . $qty, $material['quantity_on_hand'], round((float)$material['quantity_on_hand'] - (float)$qty, 2)]);
         }
         $newStatus = 'In Production';
         $column = 'production_status';
