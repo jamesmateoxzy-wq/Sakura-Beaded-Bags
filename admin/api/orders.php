@@ -120,11 +120,12 @@ function ord_get(PDO $pdo): void {
     $orders = [];
     $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
             o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
-            c.customer_id, c.full_name, c.phone,
+            c.customer_id, c.full_name, c.phone, COALESCE(rf.refund_amount,0) AS refund_amount,
             b.order_total, b.amount_paid, b.balance_due, b.payment_status
         FROM customer_orders o
         JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
+        LEFT JOIN order_refunds rf ON rf.order_id=o.order_id
         ORDER BY o.order_date ASC, o.order_id ASC')->fetchAll();
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
@@ -138,7 +139,7 @@ function ord_get(PDO $pdo): void {
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
             'payment' => $r['payment_status'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
-            'balance' => (float) $r['balance_due'], 'archived' => $r['archived_at'] !== null, 'archivedAt' => $r['archived_at'],
+            'balance' => (float) $r['balance_due'], 'refund' => (float)$r['refund_amount'], 'archived' => $r['archived_at'] !== null, 'archivedAt' => $r['archived_at'],
             'items' => [], 'materials' => [],
         ];
     }
@@ -333,34 +334,36 @@ function ord_cancel(PDO $pdo, array $data): array {
     if (!in_array($status, ['Pending', 'In Production', 'Ready', 'Completed'], true)) {
         throw new InvalidArgumentException('This order cannot be cancelled.');
     }
-    // Paid orders require an explicit refund workflow. Never restore stock automatically.
-    $paidQuery = $pdo->prepare("SELECT COUNT(*) FROM payments
-        WHERE order_id = ? AND payment_status = 'Successful'");
+    // The order row is locked; payment writers take the same lock.
+    $paidQuery = $pdo->prepare("SELECT COALESCE(SUM(amount),0) FROM payments WHERE order_id=? AND payment_status='Successful'");
     $paidQuery->execute([$orderId]);
-    if ((int) $paidQuery->fetchColumn() > 0) {
-        throw new InvalidArgumentException('This order has a recorded payment. Refund/void the payment before cancelling the order.');
+    $paid = (int)round((float)$paidQuery->fetchColumn()*100);
+    $raw = $data['refundAmount'] ?? ($paid===0 ? '0' : null);
+    if ((!is_string($raw) && !is_int($raw) && !is_float($raw)) || !preg_match('/^(?:0|[1-9][0-9]{0,9})(?:\.[0-9]{1,2})?$/D',(string)$raw)) throw new InvalidArgumentException('Enter the amount actually refunded (0 if none).');
+    $refund = (int)round((float)$raw*100);
+    if ($refund < 0 || $refund > $paid) throw new InvalidArgumentException('Refund cannot exceed successful payments received.');
+    if ($paid > 0 && ($data['refundConfirmed'] ?? false) !== true) throw new InvalidArgumentException('Confirm the refund has already been handled outside SBB.');
+    $stmt = $pdo->prepare("SELECT material_id, SUM(-quantity_change) AS used_qty
+        FROM inventory_movements WHERE order_id=? AND movement_type IN ('Production Use','Return')
+        GROUP BY material_id HAVING SUM(-quantity_change)>0 ORDER BY material_id");
+    $stmt->execute([$orderId]);
+    $materials = $stmt->fetchAll();
+    if ($materials && $status !== 'Pending' && ($data['restoreConfirmed'] ?? false) !== true) throw new InvalidArgumentException('Confirm all deducted materials are physically recoverable before cancelling.');
+    $lockStock = $pdo->prepare('SELECT quantity_on_hand FROM materials WHERE material_id=? FOR UPDATE');
+    $addBack = $pdo->prepare('UPDATE materials SET quantity_on_hand=quantity_on_hand+? WHERE material_id=?');
+    $record = $pdo->prepare("INSERT INTO inventory_movements (material_id,order_id,movement_type,quantity_change,note,previous_quantity,resulting_quantity)
+        VALUES (?,?,'Return',?,'Restored on order cancellation',?,?)");
+    foreach ($materials as $m) {
+        $mid = (int)$m['material_id']; $qty = number_format((float)$m['used_qty'],2,'.','');
+        $lockStock->execute([$mid]); $before = $lockStock->fetchColumn();
+        if ($before===false) throw new RuntimeException('Material not found.');
+        $after = round((float)$before+(float)$qty,2);
+        if ($after>1000000) throw new InvalidArgumentException('Restoring materials would exceed maximum stock.');
+        $addBack->execute([$qty,$mid]);
+        $record->execute([$mid,$orderId,$qty,$before,$after]);
     }
-    if ($status === 'Pending') {
-        $stmt = $pdo->prepare("SELECT material_id, SUM(-quantity_change) AS used_qty
-            FROM inventory_movements WHERE order_id = ? AND movement_type = 'Production Use'
-            GROUP BY material_id ORDER BY material_id");
-        $stmt->execute([$orderId]);
-        $materials = $stmt->fetchAll();
-        $lockStock = $pdo->prepare('SELECT quantity_on_hand FROM materials WHERE material_id = ? FOR UPDATE');
-        $addBack = $pdo->prepare('UPDATE materials SET quantity_on_hand = quantity_on_hand + ? WHERE material_id = ?');
-        $record = $pdo->prepare("INSERT INTO inventory_movements
-            (material_id, order_id, movement_type, quantity_change, note, previous_quantity, resulting_quantity)
-            VALUES (?, ?, 'Return', ?, 'Restored when pending order was cancelled', ?, ?)");
-        foreach ($materials as $r) {
-            $qty = number_format((float) $r['used_qty'], 2, '.', '');
-            if ((float) $qty <= 0) continue;
-            $lockStock->execute([(int)$r['material_id']]);
-            $before = $lockStock->fetchColumn();
-            if ($before === false) throw new RuntimeException('Material not found.');
-            $addBack->execute([$qty, (int) $r['material_id']]);
-            if ($addBack->rowCount() !== 1) throw new RuntimeException('Could not restore material stock.');
-            $record->execute([(int)$r['material_id'], $orderId, $qty, $before, round((float)$before + (float)$qty, 2)]);
-        }
+    if ($paid>0) {
+        $pdo->prepare('INSERT INTO order_refunds (order_id,refund_amount,note) VALUES (?,?,?)')->execute([$orderId,number_format($refund/100,2,'.',''),'Cancellation settlement recorded manually; original receipts retained']);
     }
     $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled', archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP) WHERE order_id = ?");
     $stmt->execute([$orderId]);
@@ -368,9 +371,7 @@ function ord_cancel(PDO $pdo, array $data): array {
         VALUES (?, 'Production', ?, 'Cancelled', 'Cancelled and automatically archived')");
     $history->execute([$orderId, $status]);
     $pdo->commit();
-    $message = $status === 'Pending'
-        ? 'Pending order cancelled. Any legacy allocated stock was returned; V2 pending orders had no deduction.'
-        : 'Order marked Cancelled in Production. Materials already used were not returned to inventory.';
+    $message = 'Order cancelled. ' . ($materials ? 'Deducted materials restored. ' : 'No stock needed to be restored. ') . ($paid > 0 ? 'Refund recorded: ₱' . number_format($refund/100,2) . '. ' : '');
     return ['ok' => true, 'archived' => true, 'message' => $message . ' Automatically archived.'];
 }
 
