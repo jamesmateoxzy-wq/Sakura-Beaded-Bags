@@ -74,6 +74,7 @@
   async function loadData() {
     var data = await fetchJSON(api);
     products = data.products || [];
+    orderCatalog = data.materialCatalog || [];
     orders = data.orders || [];
     csrf = data.csrf || '';
     renderProducts();
@@ -98,35 +99,41 @@
     if (products.some(function (p) { return String(p.id) === selected; })) $('ordProduct').value = selected;
     syncProduct();
   }
+  var orderRecipe = [];
+  var orderCatalog = [];
   function syncProduct() {
     var p = product();
     $('ordLabor').value = p ? p.labor : 0;
     $('ordPackaging').value = p ? p.packaging : 0;
     $('ordDpPolicy').value = p ? p.downPaymentPercent : 50;
+    orderRecipe = p ? p.materials.map(function(m){return Object.assign({},m);}) : [];
     renderBom();
   }
+  function recalcBom() {
+    var p = product(), qty = Math.max(1, Math.floor(orderQty() || 1));
+    var mc = orderRecipe.reduce(function(n,m){return n+Math.round(Number(m.qty)*Number(m.cost)*100);},0)/100;
+    var unitCost = p ? mc+Number(p.labor)+Number(p.packaging)+Number(p.otherCost||0) : 0;
+    var original = p ? p.materials.map(function(m){return m.id+':'+Number(m.qty);}).sort().join('|') : '';
+    var current = orderRecipe.map(function(m){return m.id+':'+Number(m.qty);}).sort().join('|');
+    var price = p ? (original===current ? Number(p.price) : Math.round(unitCost*(1+Number(p.markup)/100)*100)/100) : 0;
+    $('ordUnitCost').textContent=money(unitCost);
+    $('ordUnitPrice').textContent=money(price);
+    $('ordTotalPrice').textContent=money(price*qty);
+    $('ordDownpayment').textContent=money(price*qty*(p?Number(p.downPaymentPercent):0)/100);
+    $('ordFifoNote').textContent='Inventory deducted when production starts';
+    orderRecipe.forEach(function(m,i){var cell=$('ordBomRows').querySelector('[data-sub="'+i+'"]');if(cell)cell.textContent=money(Number(m.qty)*qty*Number(m.cost));});
+    var short=orderRecipe.find(function(m){return Number(m.qty)*qty>Number(m.stock)+0.00001;});
+    if(short)warn('Stock warning: not enough '+short.name+' for production.');else warn('');
+  }
   function renderBom() {
-    var p = product();
-    var qty = Math.max(1, Math.floor(orderQty() || 1));
-    $('ordBomTitle').textContent = p ? 'Bill of Materials — ' + p.name : 'Bill of Materials';
-    $('ordBomRows').innerHTML = (p ? p.materials : []).map(function (m) {
-      var needed = Number(m.qty) * qty;
-      return '<tr><td>' + esc(m.name) + '</td><td>' + esc(needed.toFixed(2)) + ' ' + esc(m.unit) +
-        '</td><td>' + money(m.cost) + '</td><td>' + money(needed * m.cost) + '</td><td>—</td></tr>';
+    var p=product();
+    $('ordBomTitle').textContent=p?'Bill of Materials — '+p.name:'Bill of Materials';
+    $('ordBomRows').innerHTML=orderRecipe.map(function(m,i){
+      return '<tr><td>'+esc(m.name)+'</td><td><input class="input" type="number" min="0.01" step="0.01" max="1000000" data-bom-qty="'+i+'" value="'+esc(m.qty)+'" aria-label="Quantity per bag"> '+esc(m.unit)+'</td><td>'+money(m.cost)+'</td><td data-sub="'+i+'"></td><td><button type="button" class="btn btn-outline btn-sm" data-bom-remove="'+i+'">Remove</button></td></tr>';
     }).join('');
-    var unitCost = p ? Number(p.unitCost) : 0;
-    var price = p ? Number(p.price) : 0;
-    var dpPercent = p ? Number(p.downPaymentPercent) : 0;
-    $('ordUnitCost').textContent = money(unitCost);
-    $('ordUnitPrice').textContent = money(price);
-    $('ordTotalPrice').textContent = money(price * qty);
-    $('ordDownpayment').textContent = money(price * qty * dpPercent / 100);
-    $('ordFifoNote').textContent = 'Recipe from Products · inventory deducted when production starts';
-    if (!p || !p.materials.length) return;
-    var short = p.materials.find(function (m) { return Number(m.qty) * qty > Number(m.stock) + 0.00001; });
-    if (short) warn('Stock warning: not enough ' + short.name + ': requires ' + (Number(short.qty) * qty).toFixed(2) +
-      ' ' + short.unit + ', currently ' + Number(short.stock).toFixed(2) + ' available.');
-    else warn('');
+    $('ordExtraMaterial').innerHTML=orderCatalog.filter(function(m){return !orderRecipe.some(function(r){return r.id===m.id;});}).map(function(m){return '<option value="'+esc(m.id)+'">'+esc(m.name)+'</option>';}).join('');
+    $('ordAddExtra').disabled=!p||!$('ordExtraMaterial').value;
+    recalcBom();
   }
   function resetNewForm() {
     $('ordCreateForm').reset();
@@ -199,7 +206,7 @@
     detailOrder = o;
     renderOrders();
     $('ordDetailId').value = o.rawId;
-    $('ordDetailCode').textContent = o.id + ' · ' + o.customerId;
+    $('ordDetailCode').textContent = o.id + ' · ' + o.customerId + ' · ' + o.paymentSlipId;
     $('ordDetailCustomer').textContent = o.customer;
     $('ordDetailAddress').textContent = (o.address || 'Address not provided') + (o.phone ? ' · ' + o.phone : '');
     $('ordDetailDate').textContent = o.timestamp || dateText(o.date);
@@ -391,7 +398,10 @@
     openModal('ordCreateModal');
   });
   $('ordProduct').addEventListener('change', syncProduct);
-  $('ordQty').addEventListener('input', renderBom);
+  $('ordQty').addEventListener('input', recalcBom);
+  $('ordBomRows').addEventListener('input',function(e){if(!e.target.matches('[data-bom-qty]'))return;orderRecipe[Number(e.target.dataset.bomQty)].qty=Number(e.target.value);recalcBom();});
+  $('ordBomRows').addEventListener('click',function(e){var btn=e.target.closest('[data-bom-remove]');if(!btn)return;orderRecipe.splice(Number(btn.dataset.bomRemove),1);renderBom();});
+  $('ordAddExtra').addEventListener('click',function(){var m=orderCatalog.find(function(x){return x.id===$('ordExtraMaterial').value;});if(m){orderRecipe.push(Object.assign({},m,{qty:1}));renderBom();}});
   $('ordSearch').addEventListener('input', renderOrders);
   $('ordFilter').addEventListener('change', renderOrders);
   document.querySelectorAll('.orders-tab').forEach(function (tab) {
@@ -417,7 +427,9 @@
         !$('ordCustomer').value.trim() || !$('ordAddress').value.trim() || !$('ordPhone').value.trim()) {
       warn('Complete all required fields. Use a valid delivery date and a quantity from 1 to 1,000.'); return;
     }
+    if(!orderRecipe.length||orderRecipe.some(function(m){return !Number.isFinite(Number(m.qty))||Number(m.qty)<0.01||Number(m.qty)>1000000||Math.abs(Number(m.qty)*100-Math.round(Number(m.qty)*100))>0.000001;})){warn('Enter valid material quantities (up to two decimals).');return;}
     var payload = {
+      recipe:orderRecipe.map(function(m){return {materialId:Number(String(m.id).replace('MAT-','')),qty:Number(m.qty)};}),
       action:'create_order', customer:$('ordCustomer').value.trim(),
       address:$('ordAddress').value.trim(), phone:$('ordPhone').value.trim(), productId:p.id, quantity:qty,
       dueDate:date, notes:$('ordNotes').value.trim(), requestKey:requestKey
