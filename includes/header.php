@@ -48,9 +48,9 @@ $nav = [
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../assets/css/style.css">
-  <?php if ($pageCss): ?><link rel="stylesheet" href="../assets/css/<?= e($pageCss) ?>"><?php endif; ?>
-    <link rel="stylesheet" href="../assets/css/responsive.css">
+  <link rel="stylesheet" href="<?= e(sbb_asset_url('css/style.css')) ?>">
+  <?php if ($pageCss): ?><link rel="stylesheet" href="<?= e(sbb_asset_url('css/' . $pageCss)) ?>"><?php endif; ?>
+    <link rel="stylesheet" href="<?= e(sbb_asset_url('css/responsive.css')) ?>">
 </head>
 <body<?= $pageBodyClass ? ' class="' . e($pageBodyClass) . '"' : '' ?>>
 <div class="app">
