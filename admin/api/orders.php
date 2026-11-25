@@ -134,7 +134,7 @@ function ord_get(PDO $pdo): void {
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
             'payment' => $r['payment_status'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
-            'balance' => (float) $r['balance_due'], 'archived' => $r['archived_at'] !== null,
+            'balance' => (float) $r['balance_due'], 'archived' => $r['archived_at'] !== null, 'archivedAt' => $r['archived_at'],
             'items' => [], 'materials' => [],
         ];
     }
@@ -290,7 +290,7 @@ function ord_cancel(PDO $pdo, array $data): array {
     $status = (string) $order['production_status'];
     if ($status === 'Cancelled') {
         $pdo->commit();
-        return ['ok' => true, 'message' => 'Order is already marked Cancelled in Production.'];
+        return ['ok' => true, 'archived' => $order['archived_at'] !== null, 'message' => 'Order is already cancelled.'];
     }
     if ($order['archived_at'] !== null) throw new InvalidArgumentException('Archived orders cannot be cancelled.');
     if (in_array($order['delivery_status'], ['In Transit', 'Delivered', 'Returned'], true)) {
@@ -324,13 +324,16 @@ function ord_cancel(PDO $pdo, array $data): array {
             $record->execute([(int) $r['material_id'], $orderId, $qty]);
         }
     }
-    $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled' WHERE order_id = ?");
+    $stmt = $pdo->prepare("UPDATE customer_orders SET production_status = 'Cancelled', archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP) WHERE order_id = ?");
     $stmt->execute([$orderId]);
+    $history = $pdo->prepare("INSERT INTO order_status_history (order_id, status_type, old_status, new_status, notes)
+        VALUES (?, 'Production', ?, 'Cancelled', 'Cancelled and automatically archived')");
+    $history->execute([$orderId, $status]);
     $pdo->commit();
     $message = $status === 'Pending'
         ? 'Pending order cancelled. Any legacy allocated stock was returned; V2 pending orders had no deduction.'
         : 'Order marked Cancelled in Production. Materials already used were not returned to inventory.';
-    return ['ok' => true, 'message' => $message];
+    return ['ok' => true, 'archived' => true, 'message' => $message . ' Automatically archived.'];
 }
 
 /**
@@ -422,39 +425,56 @@ function ord_advance(PDO $pdo, array $data): array {
     }
 
     // Column and new status are fixed constants from the controlled state machine.
-    $update = $pdo->prepare('UPDATE customer_orders SET ' . $column . ' = ? WHERE order_id = ?');
+    $autoArchive = $type === 'Delivery' && $newStatus === 'Delivered';
+    $update = $pdo->prepare('UPDATE customer_orders SET ' . $column . ' = ?' .
+        ($autoArchive ? ', archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)' : '') . ' WHERE order_id = ?');
     $update->execute([$newStatus, $orderId]);
     $history = $pdo->prepare('INSERT INTO order_status_history
         (order_id, status_type, old_status, new_status, notes) VALUES (?, ?, ?, ?, ?)');
-    $history->execute([$orderId, $type, $oldStatus, $newStatus, 'Updated from Orders management page']);
+    $history->execute([$orderId, $type, $oldStatus, $newStatus, $autoArchive ? 'Delivered, fully paid and automatically archived' : 'Updated from Orders management page']);
     $pdo->commit();
     return ['ok' => true, 'orderId' => sprintf('ORD-%03d', $orderId),
         'status' => $type === 'Production' ? $newStatus : $production,
         'delivery' => $type === 'Delivery' ? $newStatus : $delivery,
-        'message' => sprintf('Order %s updated to %s. Saved to MySQL.', sprintf('ORD-%03d', $orderId), $newStatus)];
+        'archived' => $autoArchive,
+        'message' => sprintf('Order %s updated to %s.', sprintf('ORD-%03d', $orderId), $newStatus) . ($autoArchive ? ' Automatically archived.' : '')];
 }
 
 function ord_archive(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
-    $stmt = $pdo->prepare("UPDATE customer_orders SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)
-        WHERE order_id = ?");
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare('SELECT production_status, delivery_status, archived_at FROM customer_orders WHERE order_id = ? FOR UPDATE');
     $stmt->execute([$orderId]);
-    if ($stmt->rowCount() < 1) {
-        $stmt = $pdo->prepare('SELECT production_status, archived_at FROM customer_orders WHERE order_id = ?');
-        $stmt->execute([$orderId]);
-        $current = $stmt->fetch();
-        if (!$current) throw new InvalidArgumentException('Order not found.');
-        if ($current['archived_at'] === null) throw new RuntimeException('Order could not be archived.');
+    $order = $stmt->fetch();
+    if (!$order) throw new InvalidArgumentException('Order not found.');
+    if ($order['archived_at'] === null) {
+        $balance = $pdo->prepare('SELECT order_total, amount_paid FROM v_order_balances WHERE order_id = ?');
+        $balance->execute([$orderId]);
+        $amounts = $balance->fetch();
+        $settled = $amounts && (float)$amounts['amount_paid'] == 0.0;
+        $paid = $amounts && (float)$amounts['order_total'] > 0 &&
+            (float)$amounts['amount_paid'] >= (float)$amounts['order_total'];
+        if (!(($order['production_status'] === 'Cancelled' && $settled) ||
+            ($order['production_status'] === 'Completed' && $order['delivery_status'] === 'Delivered' && $paid))) {
+            throw new InvalidArgumentException('Only settled cancelled orders and fully paid delivered orders can be archived.');
+        }
+        $pdo->prepare('UPDATE customer_orders SET archived_at = CURRENT_TIMESTAMP WHERE order_id = ?')->execute([$orderId]);
     }
-    return ['ok' => true, 'message' => 'Order archived. No inventory changed.'];
+    $pdo->commit();
+    return ['ok' => true, 'archived' => true, 'message' => 'Order archived. No inventory changed.'];
 }
 
 function ord_unarchive(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
     $pdo->beginTransaction();
-    $stmt = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt = $pdo->prepare('SELECT production_status, delivery_status FROM customer_orders WHERE order_id = ? FOR UPDATE');
     $stmt->execute([$orderId]);
-    if ($stmt->fetchColumn() === false) throw new InvalidArgumentException('Order not found.');
+    $order = $stmt->fetch();
+    if (!$order) throw new InvalidArgumentException('Order not found.');
+    if ($order['production_status'] === 'Cancelled' || $order['delivery_status'] === 'Delivered') {
+        throw new InvalidArgumentException('Cancelled and delivered orders stay in the archive for history.');
+    }
+    // Allow recovery of active orders manually archived by the older version.
     $pdo->prepare('UPDATE customer_orders SET archived_at = NULL WHERE order_id = ?')->execute([$orderId]);
     $pdo->commit();
     return ['ok' => true, 'message' => 'Order removed from archive. Status, payments and inventory were unchanged.'];
