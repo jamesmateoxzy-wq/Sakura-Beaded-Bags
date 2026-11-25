@@ -1,258 +1,107 @@
-/* Sakura Beaded Bags - Financial Reports backed by read-only MySQL API. */
+/* V2 reports: booked order cohort and payment-date cash flow are kept separate. */
 (function () {
   'use strict';
-  const root = document.getElementById('operationsPage');
-  if (!root || root.dataset.module !== 'reports') return;
-
   const $ = id => document.getElementById(id);
-  const formatMoney = amount => '₱' + Number(amount || 0).toLocaleString('en-PH', {
-    minimumFractionDigits: 2, maximumFractionDigits: 2
-  });
-  const escapeHtml = value => String(value == null ? '' : value).replace(/[&<>"']/g,
-    char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
-  const cents = value => Math.round(Number(value || 0) * 100);
-  const monthOf = iso => String(iso || '').slice(0, 7);
-  const shortMonth = month => {
-    const parts = /^([0-9]{4})-([0-9]{2})$/.exec(month);
-    if (!parts) return month;
-    return new Date(Number(parts[1]), Number(parts[2]) - 1, 1).toLocaleDateString('en-PH', {
-      month: 'short', year: 'numeric'
-    });
-  };
-  const csvCell = value => {
-    let s = String(value == null ? '' : value);
-    if (/^[\s]*[=+\-@\t\r]/.test(s)) s = "'" + s;
-    return '"' + s.replace(/"/g, '""') + '"';
-  };
-
-  let orders = [];
-  let payments = [];
-  let expenses = [];
-  let loaded = false;
-
-  function summary() {
-    const month = $('repPeriod').value || 'all';
-    const match = iso => month === 'all' || monthOf(iso) === month;
-    const includedOrders = orders.filter(order => match(order.date));
-    const includedPayments = payments.filter(payment => match(payment.date));
-    const includedExpenses = expenses.filter(expense => match(expense.date));
-    const sales = includedPayments.reduce((sum, payment) => sum + cents(payment.amount), 0);
-    const estimatedCost = includedOrders.reduce((sum, order) => sum + cents(order.estimatedCost), 0);
-    const paid = sales;
-    const orderValue = includedOrders.reduce((sum, order) => sum + cents(order.total), 0);
-    const extraExpenses = includedExpenses.reduce((sum, e) => sum + cents(e.amount), 0);
-    return {
-      month, includedOrders, includedPayments, includedExpenses, sales, estimatedCost, paid, orderValue, extraExpenses,
-      totalExpenses: estimatedCost + extraExpenses,
-      profit: sales - estimatedCost - extraExpenses,
-      balance: includedOrders.reduce((sum, order) => sum + cents(order.balance), 0)
-    };
-  }
-
-  function loadPeriods() {
-    const months = [...new Set(orders.map(order => monthOf(order.date))
-      .concat(payments.map(payment => monthOf(payment.date)))
-      .concat(expenses.map(expense => monthOf(expense.date))))]
-      .filter(value => /^\d{4}-\d{2}$/.test(value)).sort().reverse();
-    $('repPeriod').innerHTML = '<option value="all">All dates</option>' + months.map(month =>
-      '<option value="' + escapeHtml(month) + '">' + escapeHtml(shortMonth(month)) + '</option>'
-    ).join('');
-    $('repPeriod').value = months[0] || 'all';
-  }
-
-  function expenseCategories(data) {
-    const categories = new Map();
-    if (data.estimatedCost) categories.set('Estimated production cost', data.estimatedCost);
-    for (const item of data.includedExpenses) {
-      const label = 'Other expenses: ' + (item.category || 'Uncategorized');
-      categories.set(label, (categories.get(label) || 0) + cents(item.amount));
+  if (!$('operationsPage') || $('operationsPage').dataset.module !== 'reports') return;
+  const esc = x => String(x ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const cents = x => Math.round(Number(x || 0)*100);
+  const money = x => '₱'+(x/100).toLocaleString('en-PH',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pct = (x,y) => y ? (100*x/y).toFixed(1)+'%' : '—';
+  const sum = (a,fn) => a.reduce((n,x)=>n+fn(x),0);
+  let data, sections=[], metrics=[], periodLabel='';
+  const today = new Date();
+  const iso = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  $('repMonth').value=iso(today).slice(0,7);
+  $('repFrom').value=iso(new Date(today.getFullYear(),today.getMonth(),1));
+  $('repTo').value=iso(today);
+  function groupKey(date) {
+    const mode=$('repGranularity').value;
+    if(mode==='daily') return date;
+    if(mode==='yearly') return date.slice(0,4);
+    if(mode==='weekly') {
+      const d=new Date(date+'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+6)%7));
+      return d.toISOString().slice(0,10);
     }
-    return [...categories].map(([name, value]) => ({name, value}));
+    return date.slice(0,7);
   }
-
-  function groupSeries(data) {
-    const granularity = $('repGranularity').value;
-    const series = new Map();
-    function keyFor(date) {
-      const month = monthOf(date);
-      const year = Number(month.slice(0, 4));
-      const m = Number(month.slice(5, 7));
-      if (granularity === 'yearly') return String(year);
-      if (granularity === 'quarterly') return year + ' Q' + Math.ceil(m / 3);
-      return month;
+  function filter() {
+    const mode=$('repPeriod').value;
+    for(const [id,show] of [['repMonthWrap',mode==='month'],['repYearWrap',mode==='year'],['repFromWrap',mode==='range'],['repToWrap',mode==='range']]) $(id).hidden=!show;
+    if(mode==='month') {const m=$('repMonth').value; if(!m) throw Error('Choose a month.'); periodLabel=m;return x=>x.startsWith(m);}
+    if(mode==='year') {const y=$('repYear').value; periodLabel=y;return x=>x.startsWith(y);}
+    if(mode==='range') {
+      const a=$('repFrom').value,b=$('repTo').value;
+      if(!a||!b||a>b) throw Error('Select a valid start and end date.');
+      periodLabel=a+' to '+b;return x=>x>=a&&x<=b;
     }
-    function get(key) {
-      if (!series.has(key)) series.set(key, {key, revenue:0, expenses:0});
-      return series.get(key);
+    periodLabel='All dates';return ()=>true;
+  }
+  function table(title,desc,head,rows,chart=false) {
+    sections.push({title,desc,head,rows});
+    let chartHtml='';
+    if(chart&&rows.length){
+      const max=Math.max(1,...rows.map(r=>r[1]));
+      chartHtml='<div class="v2-sales-bars">'+rows.map(r=>'<div><span>'+esc(r[0])+'</span><div class="v2-track"><i style="width:'+Math.max(0,Math.min(100,r[1]/max*100))+'%"></i></div><strong>'+esc(money(r[1]))+'</strong></div>').join('')+'</div>';
     }
-    for (const payment of data.includedPayments) {
-      get(keyFor(payment.date)).revenue += cents(payment.amount);
-    }
-    for (const order of data.includedOrders) {
-      const point = get(keyFor(order.date));
-      point.expenses += cents(order.estimatedCost);
-    }
-    for (const expense of data.includedExpenses) {
-      get(keyFor(expense.date)).expenses += cents(expense.amount);
-    }
-    return [...series.values()].sort((a, b) => a.key.localeCompare(b.key)).map(item => ({
-      ...item, label:granularity === 'monthly' ? shortMonth(item.key) : item.key
-    }));
+    const displayRows=rows.map(r=>r.map((v,i)=>chart&&i===1?money(v):v));
+    return '<section class="card v2-report-section"><h2>'+esc(title)+'</h2><p>'+esc(desc)+'</p>'+chartHtml+'<div class="v2-table-scroll"><table class="rep-analysis-table"><thead><tr>'+head.map(h=>'<th>'+esc(h)+'</th>').join('')+'</tr></thead><tbody>'+displayRows.map(r=>'<tr>'+r.map(v=>'<td>'+esc(v)+'</td>').join('')+'</tr>').join('')+'</tbody></table></div>'+(rows.length?'':'<p>No records for this period.</p>')+'</section>';
   }
-
-  function chartMaximum(points) {
-    const biggest = Math.max(0, ...points.map(item => Math.max(item.revenue, item.expenses)));
-    if (!biggest) return 10000; // cents => ₱100
-    const order = 10 ** Math.floor(Math.log10(biggest));
-    return Math.ceil(biggest / order) * order;
-  }
-  function chartAxis(max) {
-    return '<div class="rep-chart-axis"><span>' + escapeHtml(formatMoney(max / 100)) + '</span><span>' +
-      escapeHtml(formatMoney(max / 200)) + '</span><span>₱0</span></div>';
-  }
-  function graphBars(points, max, compare) {
-    return '<div class="rep-chart-plot">' + points.map(item => {
-      const salesPercent = Math.max(0, Math.min(100, item.revenue / max * 100));
-      const costPercent = Math.max(0, Math.min(100, item.expenses / max * 100));
-      if (!compare) return '<div class="rep-chart-column"><div class="rep-sales-track">' +
-        '<div class="rep-sales-bar" style="height:' + salesPercent.toFixed(2) + '%" title="' +
-        escapeHtml(formatMoney(item.revenue / 100)) + '"></div></div><span class="rep-chart-label">' +
-        escapeHtml(item.label) + '</span></div>';
-      return '<div class="rep-chart-column"><div class="rep-compare-track">' +
-        '<div class="rep-compare-bar rep-revenue-bar" style="height:' + salesPercent.toFixed(2) + '%" title="Sales ' +
-        escapeHtml(formatMoney(item.revenue / 100)) + '"></div>' +
-        '<div class="rep-compare-bar rep-expense-bar" style="height:' + costPercent.toFixed(2) + '%" title="Expenses ' +
-        escapeHtml(formatMoney(item.expenses / 100)) + '"></div></div><span class="rep-chart-label">' +
-        escapeHtml(item.label) + '</span></div>';
-    }).join('') + '</div>';
-  }
-
-  function renderCharts(data) {
-    const granularity = $('repGranularity').value;
-    const points = groupSeries(data);
-    const max = chartMaximum(points);
-    $('repSalesTitle').textContent = granularity === 'monthly' ? 'Monthly Sales' :
-      granularity === 'quarterly' ? 'Quarterly Sales' : 'Yearly Sales';
-    $('repSalesSubtitle').textContent = (data.month === 'all' ? 'All dates' : shortMonth(data.month)) +
-      ' · successful payments received';
-    const last = points.length ? points[points.length - 1].revenue : 0;
-    const previous = points.length > 1 ? points[points.length - 2].revenue : 0;
-    $('repSalesTrend').textContent = previous ?
-      ((last - previous) >= 0 ? '+' : '') + ((last - previous) / previous * 100).toFixed(1) + '%' : 'No prior period';
-    $('repBars').innerHTML = chartAxis(max) + graphBars(points, max, false);
-    $('repComparison').innerHTML = chartAxis(max) + graphBars(points, max, true);
-    $('repChartEmpty').hidden = points.some(item => item.revenue !== 0);
-    $('repComparisonEmpty').hidden = points.some(item => item.revenue !== 0 || item.expenses !== 0);
-  }
-
   function render() {
-    if (!loaded) return;
-    const data = summary();
-    const total = data.sales / 100;
-    const costs = data.totalExpenses / 100;
-    const profit = data.profit / 100;
-    const margin = data.sales ? data.profit / data.sales * 100 : 0;
-    const label = data.month === 'all' ? 'All dates' : shortMonth(data.month);
-    $('repRevenue').textContent = formatMoney(total);
-    $('repRevenueNote').textContent = 'Successful payments received in this period';
-    $('repExpenses').textContent = formatMoney(costs);
-    $('repProfit').textContent = formatMoney(profit);
-    $('repOrders').textContent = String(data.includedOrders.length);
-    $('repOrderAverage').textContent = formatMoney(data.includedOrders.length ?
-      data.orderValue / 100 / data.includedOrders.length : 0) + ' average order value';
-    $('repProfitNote').textContent = margin.toFixed(1) + '% estimated profit margin';
-    $('repAnalysisSubtitle').textContent = label + ' · successful payments minus estimated production costs and recorded expenses';
-    const categories = expenseCategories(data);
-    $('repExpensesTable').innerHTML = categories.map(item => '<tr><td>' + escapeHtml(item.name) + '</td><td>' +
-      formatMoney(item.value / 100) + '</td><td>' +
-      (data.sales ? (item.value / data.sales * 100).toFixed(1) : '0.0') + '%</td></tr>').join('');
-    $('repExpensesEmpty').hidden = categories.length !== 0;
-    $('repNetProfit').textContent = formatMoney(profit) + ' · ' + margin.toFixed(1) + '%';
-    $('repGlanceTitle').textContent = label + ' at a glance';
-    $('repMargin').textContent = margin.toFixed(1) + '%';
-    $('repMarginBar').style.width = Math.max(0, Math.min(100, margin)) + '%';
-    $('repGlanceText').textContent = 'Estimated profit uses cost snapshots saved with orders and separately recorded expenses; it is not audited net income.';
-    $('repCalculation').textContent = formatMoney(total) + ' successful payments − ' +
-      formatMoney(data.estimatedCost / 100) + ' estimated production costs − ' +
-      formatMoney(data.extraExpenses / 100) + ' recorded other expenses';
-    $('repPrepared').textContent = 'Successful payments received: ' +
-      formatMoney(data.paid / 100) + ' · Outstanding: ' + formatMoney(data.balance / 100) +
-      ' · Currency PHP (₱)';
-    renderCharts(data);
+    if(!data)return;
+    $('repExport').disabled=true;$('repPrint').disabled=true;
+    try {
+      const match=filter(), orders=data.orders.filter(o=>match(o.date)), ids=new Set(orders.map(o=>String(o.id)));
+      const items=data.items.filter(i=>ids.has(String(i.orderId))), payments=data.payments.filter(p=>match(p.date)), expenses=data.expenses.filter(e=>match(e.date));
+      const sales=sum(orders,o=>cents(o.total)), costs=sum(items,i=>Number(i.quantity)*cents(i.cost));
+      const known=items.filter(i=>i.materialCost!==null&&i.laborCost!==null&&i.otherCost!==null);
+      const unknown=items.length-known.length;
+      const material=sum(known,i=>Number(i.quantity)*cents(i.materialCost)), labor=sum(known,i=>Number(i.quantity)*cents(i.laborCost)), other=sum(known,i=>Number(i.quantity)*cents(i.otherCost));
+      const unclassified=costs-material-labor-other, gross=sales-costs, overhead=sum(expenses,e=>cents(e.amount));
+      const cash=sum(payments,p=>cents(p.amount)), outstanding=sum(orders,o=>Math.max(0,cents(o.balance)));
+      const status={Pending:0,Downpayment:0,'Fully Paid':0};
+      orders.forEach(o=>{const paid=cents(o.received),total=cents(o.total);status[paid<=0?'Pending':paid>=total?'Fully Paid':'Downpayment']++;});
+      const timeline=new Map();
+      orders.forEach(o=>{const k=groupKey(o.date);timeline.set(k,(timeline.get(k)||0)+cents(o.total));});
+      const customers=new Map(), products=new Map(), first=new Map();
+      for(const o of data.orders){const key=String(o.customerId);if(!first.has(key)||first.get(key)>o.date)first.set(key,o.date);}
+      for(const o of orders){const k=String(o.customerId),r=customers.get(k)||{name:o.customer,orders:0,sales:0};r.orders++;r.sales+=cents(o.total);customers.set(k,r);}
+      for(const i of items){const k=String(i.productId),r=products.get(k)||{name:i.product,qty:0,sales:0,cost:0};r.qty+=Number(i.quantity);r.sales+=Number(i.quantity)*cents(i.price);r.cost+=Number(i.quantity)*cents(i.cost);products.set(k,r);}
+      $('repRevenue').textContent=money(sales);$('repMaterial').textContent=money(material)+(unknown?'*':'');$('repLabor').textContent=money(labor)+(unknown?'*':'');$('repProfit').textContent=money(gross);
+      $('repStatus').textContent=periodLabel+' · '+orders.length+' orders'+(unknown?' · * '+unknown+' older order line(s) have unknown cost components; displayed component totals are known amounts only.':'');
+      sections=[];metrics=[['Total booked sales',money(sales)],['Known material expenses',money(material)],['Known labor expenses',money(labor)],['Estimated gross profit',money(gross)],['Unknown historical cost lines',unknown]];
+      const series=[...timeline].sort((a,b)=>a[0].localeCompare(b[0]));
+      const topCustomers=[...customers].sort((a,b)=>b[1].sales-a[1].sales);
+      const productRows=[...products.values()];
+      const topProducts=[...productRows].sort((a,b)=>b.qty-a.qty);
+      const profitable=[...productRows].sort((a,b)=>(b.sales-b.cost)-(a.sales-a.cost));
+      const html=[
+        table('1. Sales Revenue Analysis','Booked order value by '+$('repGranularity').value+' period; weeks start Monday.',['Period','Sales'],series,true),
+        table('2. Material & Labor Expense Analysis','Saved per-unit cost components multiplied by order quantities. Unknown older components are not guessed.',['Cost component','Amount'],[['Materials (known)',money(material)],['Labor (known)',money(labor)],['Packaging and other (known)',money(other)],['Unclassified historical cost',money(unclassified)],['Total estimated production cost',money(costs)]]),
+        table('3. Profitability Analysis','Gross profit uses booked sales less estimated production costs. Other operating expenses are separate.',['Metric','Value'],[['Booked sales',money(sales)],['Production costs',money(costs)],['Estimated gross profit',money(gross)],['Gross profit margin',pct(gross,sales)],['Recorded operating expenses',money(overhead)],['Estimated profit after expenses',money(gross-overhead)]]),
+        table('4. Payment Breakdown','Current payment status of non-cancelled orders created in the selected period.',['Payment status','Orders'],Object.entries(status)),
+        table('5. Customer Insights','Customer records ranked by booked order value. New customer records: '+[...customers.keys()].filter(k=>match(first.get(k))).length+'. Existing system creates a customer record per order; repeat-customer retention is not reliable until customer reuse is implemented.',['Customer','Orders','Booked sales','Contribution'],topCustomers.map(([k,r])=>[r.name+' (CUST-'+k+')',r.orders,money(r.sales),pct(r.sales,sales)])),
+        table('6. Product Insights — Best-selling','Ranked by quantity ordered; current product names are displayed.',['Product','Quantity','Booked sales','Estimated gross profit'],topProducts.map(r=>[r.name,r.qty,money(r.sales),money(r.sales-r.cost)])),
+        table('6b. Product Insights — Most profitable','Ranked by estimated gross profit.',['Product','Estimated gross profit','Margin'],profitable.map(r=>[r.name,money(r.sales-r.cost),pct(r.sales-r.cost,r.sales)])),
+        table('7. Cash-Flow Tracking','Successful receipts by payment date; outstanding is the current balance of selected orders, not an as-of historical balance. Refunded/cancelled payments are excluded.',['Metric','Amount'],[['Cash-in',money(cash)],['Outstanding balances',money(outstanding)],['Other recorded expenses',money(overhead)]])
+      ];
+      $('repSections').innerHTML=html.join('');
+      $('repExport').disabled=false;$('repPrint').disabled=false;
+    }catch(e){$('repStatus').textContent=e.message;$('repSections').innerHTML='';['repRevenue','repMaterial','repLabor','repProfit'].forEach(id=>$(id).textContent='—');}
   }
-
-  function exportCsv() {
-    if (!loaded) return;
-    const data = summary();
-    const rows = [
-      ['SAKURA BEADED BAGS - PAYMENT-BASED FINANCIAL REPORT'],
-      ['Period', data.month === 'all' ? 'All dates' : data.month],
-      ['Metric', 'Amount PHP'],
-      ['Total sales (successful payments)', (data.sales / 100).toFixed(2)],
-      ['Outstanding balance', (data.balance / 100).toFixed(2)],
-      ['Estimated production costs', (data.estimatedCost / 100).toFixed(2)],
-      ['Recorded other expenses', (data.extraExpenses / 100).toFixed(2)],
-      ['Estimated profit', (data.profit / 100).toFixed(2)],
-      ['Orders', data.includedOrders.length], [],
-      ['Expense Category', 'Amount PHP']
-    ];
-    expenseCategories(data).forEach(entry => rows.push([entry.name, (entry.value / 100).toFixed(2)]));
-    rows.push([], ['Order', 'Date', 'Status', 'Order Value PHP', 'Estimated Cost PHP', 'Received PHP', 'Balance PHP']);
-    data.includedOrders.forEach(item => rows.push([item.id, item.date, item.status,
-      item.total.toFixed(2), item.estimatedCost.toFixed(2), item.received.toFixed(2), item.balance.toFixed(2)]));
-    rows.push([], ['Recorded Other Expense Date', 'Category', 'Description', 'Amount PHP']);
-    data.includedExpenses.forEach(item => rows.push([item.date, item.category, item.description, item.amount.toFixed(2)]));
-    rows.push([], ['Notes', 'Sales include successful payments only; cancelled and refunded payments are excluded. Profit is estimated, not audited net income.']);
-    const csv = '\ufeff' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sakura-financial-report-' + (data.month === 'all' ? 'all' : data.month) + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 500);
-  }
-
-  // Figures remain estimates; revenue now uses successful payment records.
-  function renameCard(valueId, label) {
-    const card = $(valueId).closest('.rep-stat');
-    const heading = card && card.querySelector('div span');
-    if (heading) heading.textContent = label;
-  }
-  renameCard('repRevenue', 'Total Sales');
-  renameCard('repExpenses', 'Est. Costs + Expenses');
-  renameCard('repProfit', 'Estimated Profit');
-  const profitLabel = $('repNetProfit').previousElementSibling;
-  if (profitLabel) profitLabel.textContent = 'Estimated Profit';
-
-  $('repPeriod').addEventListener('change', render);
-  $('repGranularity').addEventListener('change', render);
-  $('repExport').addEventListener('click', exportCsv);
-  $('repPrint').addEventListener('click', () => { if (loaded) window.print(); });
-  $('repExport').disabled = true;
-  $('repPrint').disabled = true;
-  $('repPrepared').textContent = 'Loading financial data from MySQL…';
-  fetch('api/reports.php', {credentials: 'same-origin', cache: 'no-store'})
-    .then(async response => {
-      const data = await response.json();
-      if (!response.ok || data.ok !== true) throw new Error(data.error || 'Financial Reports API failed.');
-      if (!Array.isArray(data.orders) || !Array.isArray(data.payments) || !Array.isArray(data.expenses)) throw new Error('Unexpected report data.');
-      return data;
-    })
-    .then(data => {
-      orders = data.orders;
-      payments = data.payments;
-      expenses = data.expenses;
-      loaded = true;
-      loadPeriods();
-      $('repExport').disabled = false;
-      $('repPrint').disabled = false;
-      render();
-    })
-    .catch(error => {
-      $('repPrepared').textContent = 'Could not load reports: ' + error.message;
-      if (window.Sakura && typeof Sakura.toast === 'function') Sakura.toast('Could not load Financial Reports from MySQL.');
-      console.error('SBB Financial Reports:', error);
-    });
+  function csvCell(v){let s=String(v??'');if(/^[\s]*[=+\-@\t\r]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';}
+  $('repExport').addEventListener('click',()=>{
+    const rows=[['Sakura Beaded Bags — Financial Report'],['Period',periodLabel],...metrics];
+    for(const t of sections){rows.push([], [t.title],[t.desc],t.head,...t.rows.map(r=>t.title.startsWith('1.')?[r[0],money(r[1])]:r));}
+    const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download='sakura-financial-report.csv';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),500);
+  });
+  $('repPrint').addEventListener('click',()=>window.print());
+  ['repPeriod','repMonth','repYear','repFrom','repTo','repGranularity'].forEach(id=>$(id).addEventListener('change',render));
+  fetch('api/reports.php',{credentials:'same-origin',cache:'no-store'}).then(async r=>{const d=await r.json();if(!r.ok||!d.ok)throw Error(d.error||'Report unavailable');return d;}).then(d=>{
+    data=d;
+    const years=[...new Set([String(today.getFullYear()),...d.orders.concat(d.payments,d.expenses).map(x=>x.date.slice(0,4))])].sort().reverse();
+    $('repYear').innerHTML=years.map(y=>'<option>'+esc(y)+'</option>').join('');
+    render();
+  }).catch(e=>{$('repStatus').textContent='Could not load reports: '+e.message;});
 })();
