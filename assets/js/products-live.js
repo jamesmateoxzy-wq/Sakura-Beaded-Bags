@@ -50,7 +50,7 @@
   function categoryName(id) { return (categories.find(c => c.id === Number(id)) || {}).name || 'Uncategorized'; }
   function prices(p) {
     const materialTotal = (p.materials || []).reduce((sum, m) => sum + Math.round(Number(m.qty) * Number(lookup(m.id)?.cost ?? m.cost) * 100), 0) / 100;
-    const total = Math.round((materialTotal + Number(p.labor || 0) + Number(p.packaging || 0)) * 100) / 100;
+    const total = Math.round((materialTotal + Number(p.labor || 0) + Number(p.packaging || 0) + Number(p.otherCost || 0)) * 100) / 100;
     const price = Math.round(total * (1 + Number(p.markup || 0) / 100) * 100) / 100;
     return {materials:materialTotal,cost:total,price,profit:Math.round((price-total)*100)/100,margin:price?100*(price-total)/price:0};
   }
@@ -110,7 +110,7 @@
     $(prefix+'Cost').textContent=pesos(calc.cost);
     $(prefix+'Price').textContent=pesos(calc.price);
     $(prefix+'Profit').textContent=pesos(calc.profit);
-    $(prefix+'Note').textContent=pesos(calc.materials)+' materials + '+pesos(p.labor)+' labor + '+pesos(p.packaging)+' packaging · Profit margin: '+calc.margin.toFixed(1)+'%';
+    $(prefix+'Note').textContent=pesos(calc.materials)+' materials + '+pesos(p.labor)+' labor + '+pesos(p.packaging)+ ' packaging + '+pesos(p.otherCost)+' miscellaneous · DP: '+pesos(calc.price*Number(p.downPaymentPercent||0)/100)+' · Profit margin: '+calc.margin.toFixed(1)+'%';
     if (prefix==='s' && updateTarget!==false) { $('sTarget').value=calc.price.toFixed(2); $('sTarget').setCustomValidity(''); }
     return calc;
   }
@@ -136,7 +136,7 @@
     $('sTitle').textContent=draft.name+' · Costing sheet';
     $('sSku').textContent='SKU: '+(draft.sku||'—')+' · '+draft.category;
     $('sName').value=draft.name; $('sCategory').value=draft.categoryId;
-    $('sLabor').value=draft.labor; $('sPackaging').value=draft.packaging; $('sMarkup').value=draft.markup;
+    $('sLabor').value=draft.labor; $('sPackaging').value=draft.packaging; $('sMarkup').value=draft.markup; $('sOther').value=draft.otherCost; $('sDp').value=draft.downPaymentPercent;
     renderSelectedMaterials();
     summary('s',draft); listProducts();
   }
@@ -192,8 +192,8 @@
     if(products.some(other=>other.id!==p.id && Number(other.categoryId)===Number(p.categoryId) && other.name.trim().toLowerCase()===p.name.trim().toLowerCase())){toast('A product with this name already exists in this collection.');return false;}
     if(!categories.some(c=>c.id===Number(p.categoryId))){toast('Choose a valid category.');return false;}
     if(!Array.isArray(p.materials)||p.materials.length===0){toast('Add at least one recipe material.');return false;}
-    for(const field of ['labor','packaging','markup']){
-      const val=Number(p[field]); if(!Number.isFinite(val)||val<0||val>(field==='markup'?999.99:1000000)||Math.abs(Math.round(val*100)-val*100)>0.000001){toast('Enter valid labor, packaging and markup amounts (up to 2 decimals).');return false;}
+    for(const field of ['labor','packaging','markup','otherCost','downPaymentPercent']){
+      const val=Number(p[field]); if(!Number.isFinite(val)||val<0||val>(field==='markup'?999.99:field==='downPaymentPercent'?100:1000000)||Math.abs(Math.round(val*100)-val*100)>0.000001){toast('Enter valid labor, packaging and markup amounts (up to 2 decimals).');return false;}
     }
     for(const item of p.materials){
       const n=Number(item.qty);
@@ -202,7 +202,7 @@
     if(!Number.isFinite(prices(p).price)||prices(p).price<=0||prices(p).price>100000000){toast('Calculated price is outside the allowed range.');return false;}
     return true;
   }
-  function payload(p,action) { return {action,id:p.id||undefined,name:p.name.trim(),categoryId:Number(p.categoryId),labor:Number(p.labor),packaging:Number(p.packaging),markup:Number(p.markup),materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
+  function payload(p,action) { return {action,id:p.id||undefined,name:p.name.trim(),categoryId:Number(p.categoryId),labor:Number(p.labor),packaging:Number(p.packaging),otherCost:Number(p.otherCost),downPaymentPercent:Number(p.downPaymentPercent),markup:Number(p.markup),materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
   function recipePayload(p) { return {action:'save_recipe',id:p.id,materials:p.materials.map(m=>({id:m.id,qty:Number(m.qty)}))}; }
   async function reloadAndSelect(id) {
     const data=await request(); materials=data.materials||[]; products=data.products||[]; categories=data.categories||[]; csrf=data.csrf||'';
@@ -280,6 +280,8 @@
     $('sName').addEventListener('input',()=>{if(draft){draft.name=$('sName').value;$('sTitle').textContent=(draft.name||'Product')+' · Costing sheet';}});
     $('sCategory').addEventListener('change',()=>{if(draft){draft.categoryId=Number($('sCategory').value);draft.category=categoryName(draft.categoryId);}});
     for(const type of ['Labor','Packaging','Markup']) $('s'+type).addEventListener('input',()=>{if(draft){draft[type.toLowerCase()]=num($('s'+type).value);summary('s',draft);}});
+    $('sOther').addEventListener('input',()=>{if(draft){draft.otherCost=num($('sOther').value);summary('s',draft);}});
+    $('sDp').addEventListener('input',()=>{if(draft){draft.downPaymentPercent=num($('sDp').value);summary('s',draft);}});
     $('sTarget').addEventListener('input',()=>{if(!draft)return;
       const cost=prices(draft).cost, target=num($('sTarget').value);
       if(!Number.isFinite(target)||target<=0||target<cost||target>100000000){$('sTarget').setCustomValidity('Enter a positive target price that covers the cost and does not exceed ₱100,000,000.');return;}
@@ -317,9 +319,9 @@
     $('openAddProduct').addEventListener('click',()=>{
       if(!materials.length){toast('Add materials in Inventory first.');return;}
       const defaultCategoryId = categories.some(c=>c.id===lastCreatedCategoryId) ? lastCreatedCategoryId : (categories[0]?.id||0);
-      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,markup:100};
+      newDraft={name:'',categoryId:defaultCategoryId,materials:[],labor:0,packaging:0,otherCost:0,downPaymentPercent:50,markup:100};
       $('nName').value='';$('nCategory').value=newDraft.categoryId;$('nSku').value='Assigned when saved';
-      $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;
+      $('nLabor').value=0;$('nPackaging').value=0;$('nMarkup').value=100;$('nOther').value=0;$('nDp').value=50;
       $('nPhoto').disabled=false;clearProductPhoto();
       renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);
       S.openModal('addProductModal');
@@ -327,6 +329,8 @@
     $('nName').addEventListener('input',()=>{if(newDraft)newDraft.name=$('nName').value;});
     $('nCategory').addEventListener('change',()=>{if(newDraft)newDraft.categoryId=Number($('nCategory').value);});
     for(const type of ['Labor','Packaging','Markup']) $('n'+type).addEventListener('input',()=>{if(newDraft){newDraft[type.toLowerCase()]=num($('n'+type).value);summary('n',newDraft);}});
+    $('nOther').addEventListener('input',()=>{if(newDraft){newDraft.otherCost=num($('nOther').value);summary('n',newDraft);}});
+    $('nDp').addEventListener('input',()=>{if(newDraft){newDraft.downPaymentPercent=num($('nDp').value);summary('n',newDraft);}});
     $('nAddMaterial').addEventListener('click',()=>{if(!newDraft)return;addMaterialModal('Adding to '+(newDraft.name||'new product')+' recipe',entry=>{
       addToRecipe(newDraft.materials,entry);renderRows($('nMaterials'),newDraft.materials,()=>summary('n',newDraft));summary('n',newDraft);});});
     $('nSave').addEventListener('click',async()=>{if(pending||!newDraft)return;
