@@ -164,11 +164,6 @@
     if(b){chosenSlip=b.dataset.slip;renderSlip();Sakura.openModal('paymentSlipModal');}
   });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
-  $('addPaymentMethod').addEventListener('click',async()=>{
-    if(busy)return;const name=window.prompt('New payment method name:');if(name===null||!name.trim())return;
-    const required=window.confirm('Does this payment method require a reference number? OK = Yes, Cancel = No.');
-    busy=true;try{await request('POST',{action:'add_method',name:name.trim(),requiresReference:required});await refresh();$('paymentMethod').value=name.trim();updateReference();notify('Payment method added.');}catch(e){setError(e.message);}finally{busy=false;renderOrderOptions();}
-  });
   $('paymentOrder').addEventListener('change', updateBalanceHint);
   $('paymentMethod').addEventListener('change',updateReference);
   $('recordPaymentShortcut').addEventListener('click',()=>{setError('');Sakura.openModal('recordPaymentModal');});
