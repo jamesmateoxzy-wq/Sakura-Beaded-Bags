@@ -9,6 +9,14 @@ function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+// Version local CSS and JavaScript URLs by file content to avoid stale browser caches.
+function sbb_asset_url(string $path): string {
+    $file = __DIR__ . '/../assets/' . $path;
+    $url = '../assets/' . $path;
+    $hash = is_file($file) ? hash_file('sha256', $file) : false;
+    return $hash === false ? $url : $url . '?v=' . substr($hash, 0, 16);
+}
+
 // Format a number as Philippine peso: peso(24500) -> ₱24,500
 function peso($amount, int $decimals = 0): string {
     return '₱' . number_format((float)$amount, $decimals);

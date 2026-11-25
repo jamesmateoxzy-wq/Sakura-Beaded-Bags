@@ -11,7 +11,7 @@ $pageJs = $pageJs ?? '';
 
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
-<script src="../assets/js/main.js"></script>
-<?php if ($pageJs): ?><script src="../assets/js/<?= e($pageJs) ?>"></script><?php endif; ?>
+<script src="<?= e(sbb_asset_url('js/main.js')) ?>"></script>
+<?php if ($pageJs): ?><script src="<?= e(sbb_asset_url('js/' . $pageJs)) ?>"></script><?php endif; ?>
 </body>
 </html>
