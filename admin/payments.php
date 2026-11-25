@@ -64,6 +64,7 @@ require_once __DIR__ . '/../includes/header.php';
     <section class="card pay-transactions" aria-labelledby="transactionsHeading">
         <div class="pay-section-head">
             <h2 id="transactionsHeading">Transactions</h2>
+            <div class="order-control"><select class="select" id="paymentSlipOrder" aria-label="Select order slip"></select><button type="button" class="btn btn-outline btn-sm" id="viewOrderSlip">View Order Slip</button></div>
             <div class="pay-controls">
                 <label class="pay-search">
                     <span class="pay-screenreader">Search slip, order, or customer</span>
@@ -85,7 +86,7 @@ require_once __DIR__ . '/../includes/header.php';
             <table class="table pay-table">
                 <thead>
                     <tr>
-                        <th scope="col">Payment Slip ID</th>
+                        <th scope="col">Payment Slip ID</th><th scope="col">Transaction ID</th>
                         <th scope="col">Order ID</th>
                         <th scope="col">Customer</th>
                         <th scope="col">Total</th>
@@ -125,7 +126,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <select class="select" id="paymentMethod" name="method" required>
                             <option value="GCash">GCash</option>
                             <option value="Bank Transfer">Bank Transfer</option>
-                        </select>
+                        </select><button type="button" class="btn btn-outline btn-sm" id="addPaymentMethod">Add payment method</button>
                     </div>
                     <div class="field">
                         <label for="paymentDate">Payment date <span class="req">*</span></label>
@@ -136,7 +137,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <input class="input" id="paymentReference" name="reference" type="text" maxlength="80" placeholder="GCash / bank reference" autocomplete="off">
                     </div>
                 </div>
-                <p class="pay-help">A transaction reference is required for GCash and bank transfers.</p>
+                <p class="pay-help">A reference is required for methods configured to require one.</p>
                 <p id="paymentFormError" class="pay-error" role="alert" hidden></p>
                 <div class="pay-form-actions">
                     <span id="balanceHint">Select an unpaid order to see its balance.</span>
@@ -152,7 +153,7 @@ require_once __DIR__ . '/../includes/header.php';
                 <h2 id="slipHeading">Payment Slip</h2>
                 <button type="button" id="printSlip" class="btn btn-outline btn-sm" disabled>Print Slip</button><button type="button" class="icon-btn pay-slip-close" data-close-modal="paymentSlipModal" aria-label="Close"><?= icon('x') ?></button>
             </div>
-            <div id="slipEmpty" class="pay-slip-empty">Select a transaction to view its payment slip.</div>
+            <div id="slipEmpty" class="pay-slip-empty">Select an order to view its payment slip and transaction history.</div>
             <div id="slipDetails" hidden>
                 <div class="pay-slip-meta">
                     <div>
@@ -167,9 +168,9 @@ require_once __DIR__ . '/../includes/header.php';
                 <div class="pay-slip-summary">
                     <div><small>Order total</small><strong id="slipTotal"></strong></div>
                     <div><small>Amount received</small><strong id="slipPaid"></strong></div>
-                    <div><small>Balance after payment</small><strong id="slipBalance"></strong></div>
+                    <div><small>Current outstanding balance</small><strong id="slipBalance"></strong></div>
                 </div>
-                <p class="pay-slip-note" id="slipNote"></p>
+                <p class="pay-slip-note" id="slipNote"></p><div class="table-wrap"><table class="table"><thead><tr><th>Transaction ID</th><th>Type / Status</th><th>Date</th><th>Method / Reference</th><th>Amount</th></tr></thead><tbody id="slipTransactions"></tbody></table></div>
                 <p class="pay-slip-disclaimer" id="slipDisclaimer" <?= $isDemo ? '' : 'hidden' ?>>DEMO ONLY &middot; Not a valid receipt or proof of payment.</p>
             </div>
         </section>
