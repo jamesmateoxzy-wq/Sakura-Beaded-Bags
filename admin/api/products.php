@@ -161,7 +161,7 @@ function prod_catalog(PDO $pdo): array {
         ];
     }
     $rows = $pdo->query('SELECT p.product_id, p.sku, p.product_name, p.category_id, c.category_name,
-            p.image_path, p.labor_cost, p.packaging_cost, p.other_cost, p.markup_percent, p.selling_price
+            p.image_path, p.labor_cost, p.packaging_cost, p.other_cost, p.markup_percent, p.selling_price, p.down_payment_percent
             FROM products p LEFT JOIN product_categories c ON c.category_id = p.category_id
             WHERE p.is_active = 1 ORDER BY p.product_id')->fetchAll();
     $products = array_map(static function (array $r) use ($byProduct): array {
@@ -171,7 +171,7 @@ function prod_catalog(PDO $pdo): array {
             'categoryId' => (int) $r['category_id'], 'category' => $r['category_name'] ?? '',
             'image' => $r['image_path'],
             'labor' => (float) $r['labor_cost'], 'packaging' => (float) $r['packaging_cost'],
-            'otherCost' => (float) $r['other_cost'], 'markup' => (float) $r['markup_percent'],
+            'otherCost' => (float) $r['other_cost'], 'downPaymentPercent' => (float)$r['down_payment_percent'], 'markup' => (float) $r['markup_percent'],
             'sellingPrice' => (float) $r['selling_price'], 'materials' => $byProduct[$id] ?? [],
         ];
     }, $rows);
@@ -337,6 +337,8 @@ try {
     $categoryId = prod_category_id($body['categoryId'] ?? null);
     $labor = prod_number($body['labor'] ?? null, 'Labor cost', 1000000);
     $packaging = prod_number($body['packaging'] ?? null, 'Packaging cost', 1000000);
+    $other = prod_number($body['otherCost'] ?? 0, 'Miscellaneous cost', 1000000);
+    $dp = prod_number($body['downPaymentPercent'] ?? 50, 'Downpayment percent', 100);
     $markup = prod_number($body['markup'] ?? null, 'Markup percent', 999.99);
     $materialItems = $body['materials'] ?? null;
     if (!is_array($materialItems) || !prod_is_list($materialItems) || count($materialItems) < 1 || count($materialItems) > 100) {
@@ -382,7 +384,7 @@ try {
         }
         $materialTotal += round((float) $qty * (float) $material['unit_cost'], 2);
     }
-    $total = $materialTotal + (float) $labor + (float) $packaging;
+    $total = $materialTotal + (float) $labor + (float) $packaging + (float)$other;
     $price = round($total * (1 + (float) $markup / 100), 2);
     if ($total <= 0 || $price <= 0 || !is_finite($price) || $price > 100000000) {
         throw new InvalidArgumentException('Calculated price must be positive and at most ₱100,000,000.');
@@ -391,9 +393,9 @@ try {
 
     if ($action === 'add_product') {
         $stmt = $pdo->prepare('INSERT INTO products
-            (product_name, category_id, labor_cost, packaging_cost, markup_percent, selling_price)
-            VALUES (?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$name, $categoryId, $labor, $packaging, $markup, $priceSql]);
+            (product_name, category_id, labor_cost, packaging_cost, other_cost, down_payment_percent, markup_percent, selling_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql]);
         $productId = (int) $pdo->lastInsertId();
         $letters = substr(preg_replace('/[AEIOU]/', '', preg_replace('/[^A-Z]/', '', strtoupper($name))), 0, 3);
         $prefix = str_pad($letters, 3, 'X');
@@ -402,8 +404,8 @@ try {
         $stmt->execute([$sku, $productId]);
     } else {
         $stmt = $pdo->prepare('UPDATE products SET product_name = ?, category_id = ?, labor_cost = ?,
-            packaging_cost = ?, markup_percent = ?, selling_price = ? WHERE product_id = ?');
-        $stmt->execute([$name, $categoryId, $labor, $packaging, $markup, $priceSql, $productId]);
+            packaging_cost = ?, other_cost = ?, down_payment_percent = ?, markup_percent = ?, selling_price = ? WHERE product_id = ?');
+        $stmt->execute([$name, $categoryId, $labor, $packaging, $other, $dp, $markup, $priceSql, $productId]);
         $pdo->prepare('DELETE FROM product_materials WHERE product_id = ?')->execute([$productId]);
     }
     $insert = $pdo->prepare('INSERT INTO product_materials (product_id, material_id, quantity_required) VALUES (?, ?, ?)');
