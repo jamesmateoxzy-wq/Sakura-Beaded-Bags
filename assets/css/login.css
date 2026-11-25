@@ -148,11 +148,17 @@ body.login-body .login-foot {
   line-height: 1.55;
 }
 
-@media (max-width: 380px) {
-  body.login-body .login-card h1 {
-    font-size: 30px;
+@media (max-width: 768px) {
+  body.login-body {
+    flex-direction: column;
   }
-}
+
+  body.login-body .login-brand,
+  body.login-body .login-form-side {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
   body.login-body .login-brand {
     min-height: auto;
     padding: 30px 20px 24px;
@@ -187,9 +193,14 @@ body.login-body .login-foot {
 
   body.login-body .login-foot {
     margin-top: 26px;
-  } 
+  }
+}
 
 @media (max-width: 380px) {
+  body.login-body .login-card h1 {
+    font-size: 30px;
+  }
+
   body.login-body .login-brand {
     padding: 24px 16px 20px;
   }
