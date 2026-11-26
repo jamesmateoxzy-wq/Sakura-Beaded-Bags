@@ -1,6 +1,6 @@
 # Sakura Beaded Bags — Database Setup
 
-This folder contains the **structure-only** MySQL/MariaDB schema for the SBB internal admin prototype. No sample customers, orders, payments, or inventory records are included. The exported structure includes 14 base tables and two views (`v_order_balances` and `v_product_costing`), with the current product-catalog and submission-key extensions already incorporated.
+This folder contains the **structure-only** MySQL/MariaDB schema for the SBB internal admin prototype. No sample customers, orders, payments, or inventory records are included. The exported structure includes 15 base tables and two views (`v_order_balances` and `v_product_costing`), with the current product-catalog and submission-key extensions already incorporated.
 
 ## Requirements
 
@@ -49,10 +49,13 @@ This folder contains the **structure-only** MySQL/MariaDB schema for the SBB int
 - `scripts/migrate_order_requests.php`
 - `scripts/migrate_payment_requests.php`
 - `scripts/migrate_sales_soft_deletion.php`
+- `scripts/migrate_partial_refunds.php`
 
 The sales/soft-deletion migration adds `payments.payment_status` (existing payment rows default to `Successful`), adds `materials.is_active` (existing materials remain active), and updates `v_order_balances` to count only successful payments. Preview it with `php scripts/migrate_sales_soft_deletion.php`; apply it only after backing up with `php scripts/migrate_sales_soft_deletion.php --apply`. The script is re-runnable and does not delete records.
 
 The supplied fresh-install schema already includes these structural changes, so rerunning them is not needed for new installations, except optionally to seed the three product categories.
+
+The partial-refund migration adds an auditable `payment_refunds` table and updates `v_order_balances` to subtract recorded refunds from successful payments. Preview with `php scripts/migrate_partial_refunds.php`; after backing up, apply with `php scripts/migrate_partial_refunds.php --apply`. The migration is safe to rerun and does not change existing payment records.
 
 ## Notes
 

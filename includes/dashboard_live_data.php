@@ -39,9 +39,13 @@ SQL;
     $totalsStmt = $db->prepare($totalsSql);
     $totalsStmt->execute([$start, $end]);
     $totals = $totalsStmt->fetch(PDO::FETCH_ASSOC) ?: [];
-    $salesStmt = $db->prepare("SELECT COALESCE(SUM(p.amount), 0)
+    $salesStmt = $db->prepare("SELECT COALESCE(SUM(p.amount - COALESCE(refunds.refunded_amount, 0)), 0)
         FROM payments AS p
         JOIN customer_orders AS o ON o.order_id = p.order_id
+        LEFT JOIN (
+            SELECT payment_id, SUM(amount) AS refunded_amount
+            FROM payment_refunds GROUP BY payment_id
+        ) AS refunds ON refunds.payment_id = p.payment_id
         WHERE p.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
           AND p.payment_date >= ? AND p.payment_date < ?");
     $salesStmt->execute([$start, $end]);
@@ -105,9 +109,13 @@ SQL)->fetchAll(PDO::FETCH_ASSOC);
     }
     $monthlySql = <<<'SQL'
 SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS sales_month,
-       COALESCE(SUM(p.amount), 0) AS received_sales
+       COALESCE(SUM(p.amount - COALESCE(refunds.refunded_amount, 0)), 0) AS received_sales
 FROM payments AS p
 INNER JOIN customer_orders AS o ON o.order_id = p.order_id
+LEFT JOIN (
+    SELECT payment_id, SUM(amount) AS refunded_amount
+    FROM payment_refunds GROUP BY payment_id
+) AS refunds ON refunds.payment_id = p.payment_id
 WHERE p.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
   AND p.payment_date >= ? AND p.payment_date < ?
 GROUP BY DATE_FORMAT(p.payment_date, '%Y-%m')

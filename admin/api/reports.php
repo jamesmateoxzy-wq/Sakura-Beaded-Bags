@@ -51,10 +51,14 @@ LEFT JOIN (
     GROUP BY order_id
 ) AS items ON items.order_id = o.order_id
 LEFT JOIN (
-    SELECT order_id, SUM(amount) AS paid_value
-    FROM payments
-    WHERE payment_status = 'Successful'
-    GROUP BY order_id
+    SELECT p.order_id, SUM(p.amount - COALESCE(refunds.refunded_amount, 0)) AS paid_value
+    FROM payments AS p
+    LEFT JOIN (
+        SELECT payment_id, SUM(amount) AS refunded_amount
+        FROM payment_refunds GROUP BY payment_id
+    ) AS refunds ON refunds.payment_id = p.payment_id
+    WHERE p.payment_status = 'Successful'
+    GROUP BY p.order_id
 ) AS receipts ON receipts.order_id = o.order_id
 WHERE o.production_status <> 'Cancelled'
 ORDER BY o.order_date DESC, o.order_id DESC
@@ -84,9 +88,14 @@ SQL);
     }
 
     $paymentStmt = $db->query(<<<'SQL'
-SELECT pay.payment_id, pay.order_id, DATE(pay.payment_date) AS payment_day, pay.amount
+SELECT pay.payment_id, pay.order_id, DATE(pay.payment_date) AS payment_day,
+       pay.amount - COALESCE(refunds.refunded_amount, 0) AS amount
 FROM payments AS pay
 INNER JOIN customer_orders AS o ON o.order_id = pay.order_id
+LEFT JOIN (
+    SELECT payment_id, SUM(amount) AS refunded_amount
+    FROM payment_refunds GROUP BY payment_id
+) AS refunds ON refunds.payment_id = pay.payment_id
 WHERE pay.payment_status = 'Successful' AND o.production_status <> 'Cancelled'
 ORDER BY pay.payment_date ASC, pay.payment_id ASC
 SQL);
@@ -130,7 +139,7 @@ SQL);
         'expenses' => $expenses,
         'summary' => $totals,
         'methodology' => [
-            'sales' => 'Successful payments for non-cancelled orders, grouped by payment date. Cancelled and refunded payments are excluded.',
+            'sales' => 'Successful payments for non-cancelled orders, net of recorded partial refunds and grouped by payment date. Cancelled and fully refunded payments are excluded.',
             'productionCost' => 'Estimated production cost saved on each order item at order creation.',
             'operatingExpenses' => 'Separate entries in the expenses table, grouped by their expense date.',
             'received' => 'Payments received toward selected orders regardless of the payment date.',

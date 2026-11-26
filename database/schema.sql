@@ -188,6 +188,21 @@ CREATE TABLE `payments` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `payment_refunds`
+--
+
+CREATE TABLE `payment_refunds` (
+  `refund_id` int(10) UNSIGNED NOT NULL,
+  `payment_id` int(10) UNSIGNED NOT NULL,
+  `request_key` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `refund_percent` decimal(5,2) NOT NULL,
+  `amount` decimal(12,2) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `payment_submission_keys`
 --
 
@@ -290,7 +305,32 @@ CREATE TABLE `v_product_costing` (
 --
 DROP TABLE IF EXISTS `v_order_balances`;
 
-CREATE ALGORITHM=UNDEFINED SQL SECURITY INVOKER VIEW `v_order_balances`  AS SELECT `o`.`order_id` AS `order_id`, `o`.`customer_id` AS `customer_id`, `o`.`order_date` AS `order_date`, `o`.`production_status` AS `production_status`, `o`.`delivery_status` AS `delivery_status`, coalesce(`item_totals`.`order_total`,0.00) AS `order_total`, coalesce(`receipts`.`total_paid`,0.00) AS `amount_paid`, greatest(coalesce(`item_totals`.`order_total`,0.00) - coalesce(`receipts`.`total_paid`,0.00),0.00) AS `balance_due`, CASE WHEN coalesce(`item_totals`.`order_total`,0.00) = 0 THEN 'No Items' WHEN coalesce(`receipts`.`total_paid`,0.00) = 0 THEN 'Unpaid' WHEN coalesce(`receipts`.`total_paid`,0.00) < `item_totals`.`order_total` THEN 'Partial' ELSE 'Paid' END AS `payment_status` FROM ((`customer_orders` `o` left join (select `order_items`.`order_id` AS `order_id`,sum(`order_items`.`quantity` * `order_items`.`unit_price`) AS `order_total` from `order_items` group by `order_items`.`order_id`) `item_totals` on(`item_totals`.`order_id` = `o`.`order_id`)) left join (select `payments`.`order_id` AS `order_id`,sum(`payments`.`amount`) AS `total_paid` from `payments` where `payments`.`payment_status` = 'Successful' group by `payments`.`order_id`) `receipts` on(`receipts`.`order_id` = `o`.`order_id`)) ;
+CREATE ALGORITHM=UNDEFINED SQL SECURITY INVOKER VIEW `v_order_balances` AS
+SELECT o.order_id, o.customer_id, o.order_date, o.production_status, o.delivery_status,
+       COALESCE(item_totals.order_total, 0.00) AS order_total,
+       COALESCE(receipts.total_paid, 0.00) AS amount_paid,
+       GREATEST(COALESCE(item_totals.order_total, 0.00) - COALESCE(receipts.total_paid, 0.00), 0.00) AS balance_due,
+       CASE
+           WHEN COALESCE(item_totals.order_total, 0.00) = 0 THEN 'No Items'
+           WHEN COALESCE(receipts.total_paid, 0.00) = 0 THEN 'Unpaid'
+           WHEN COALESCE(receipts.total_paid, 0.00) < item_totals.order_total THEN 'Partial'
+           ELSE 'Paid'
+       END AS payment_status
+FROM customer_orders AS o
+LEFT JOIN (
+    SELECT order_id, SUM(quantity * unit_price) AS order_total
+    FROM order_items GROUP BY order_id
+) AS item_totals ON item_totals.order_id = o.order_id
+LEFT JOIN (
+    SELECT p.order_id, SUM(p.amount - COALESCE(refunds.refunded_amount, 0)) AS total_paid
+    FROM payments AS p
+    LEFT JOIN (
+        SELECT payment_id, SUM(amount) AS refunded_amount
+        FROM payment_refunds GROUP BY payment_id
+    ) AS refunds ON refunds.payment_id = p.payment_id
+    WHERE p.payment_status = 'Successful'
+    GROUP BY p.order_id
+) AS receipts ON receipts.order_id = o.order_id;
 
 -- --------------------------------------------------------
 
@@ -383,6 +423,14 @@ ALTER TABLE `payments`
   ADD KEY `idx_pay_order_date` (`order_id`,`payment_date`);
 
 --
+-- Indexes for table `payment_refunds`
+--
+ALTER TABLE `payment_refunds`
+  ADD PRIMARY KEY (`refund_id`),
+  ADD UNIQUE KEY `uq_payment_refund_request` (`request_key`),
+  ADD KEY `idx_refund_payment_date` (`payment_id`,`created_at`);
+
+--
 -- Indexes for table `payment_submission_keys`
 --
 ALTER TABLE `payment_submission_keys`
@@ -471,6 +519,12 @@ ALTER TABLE `payments`
   MODIFY `payment_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT for table `payment_refunds`
+--
+ALTER TABLE `payment_refunds`
+  MODIFY `refund_id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `products`
 --
 ALTER TABLE `products`
@@ -533,6 +587,12 @@ ALTER TABLE `order_submission_keys`
 ALTER TABLE `payments`
   ADD CONSTRAINT `fk_pay_admin` FOREIGN KEY (`recorded_by`) REFERENCES `admins` (`admin_id`) ON DELETE SET NULL,
   ADD CONSTRAINT `fk_pay_order` FOREIGN KEY (`order_id`) REFERENCES `customer_orders` (`order_id`);
+
+--
+-- Constraints for table `payment_refunds`
+--
+ALTER TABLE `payment_refunds`
+  ADD CONSTRAINT `fk_refunds_payment` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`payment_id`);
 
 --
 -- Constraints for table `payment_submission_keys`

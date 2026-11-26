@@ -33,6 +33,7 @@
   async function refresh(preferredSlip) {
     let data = await request('GET');
     csrf = data.csrf || '';
+    window.dispatchEvent(new CustomEvent('sbb:csrf-token', {detail:csrf}));
     orders = Array.isArray(data.orders) ? data.orders : [];
     payments = Array.isArray(data.payments) ? data.payments : [];
     summary = data.summary || {};
@@ -108,6 +109,7 @@
     $('slipPaid').textContent = peso(p.amount);
     $('slipBalance').textContent = peso(p.balanceAfter);
     $('slipNote').textContent = p.paymentStatus === 'Refunded' ? 'This payment was fully refunded and is excluded from sales.' :
+      Number(p.refundedAmount || 0) > 0 ? 'Partial refund of ' + peso(p.refundedAmount) + '. Net amount received: ' + peso(p.amount) + '.' :
       p.paymentStatus === 'Cancelled' ? 'This payment was voided and is excluded from sales.' :
       p.balanceAfter <= 0 ? 'Order balance fully paid.' : 'Partial payment. Remaining balance: ' + peso(p.balanceAfter);
     if ($('slipDisclaimer')) $('slipDisclaimer').hidden = true;
@@ -141,25 +143,24 @@
       const paymentId=statusButton.dataset.paymentId;
       const payment=payments.find(item=>String(item.rawId)===String(paymentId));
       if(!payment||busy)return;
-      const prompt=status==='Refunded'
-        ? 'Confirm the full amount was returned to the customer, then mark '+payment.id+' as refunded?'
-        : 'Void '+payment.id+'? Its amount will be removed from sales and the order balance recalculated.';
-      if(!window.confirm(prompt))return;
-      busy=true;saveBtn.disabled=true;$('recordPaymentShortcut').disabled=true;
-      try{
-        const result=await request('POST',{action:'update_payment_status',paymentId:payment.rawId,status});
-        await refresh(payment.id);
-        notify(result.message||'Payment status updated.');
-      }catch(error){
-        notify(error.message||'Could not update payment status.');
-        await refresh().catch(()=>{});
-      }finally{busy=false;renderOrderOptions();}
+      if(status==='Refunded'){
+        if(window.SakuraRefund) window.SakuraRefund.open(payment);
+        else notify('Refund dialog is unavailable. Refresh the page and try again.');
+        return;
+      }
+      if(status==='Cancelled'){
+        if(window.SakuraVoid) window.SakuraVoid.open(payment);
+        else notify('Void dialog is unavailable. Refresh the page and try again.');
+      }
       return;
     }
     const b=e.target.closest('[data-slip]');
     if(b){chosenSlip=b.dataset.slip;renderSlip();Sakura.openModal('paymentSlipModal');}
   });
   $('paymentPagination').addEventListener('click',e=>{const b=e.target.closest('[data-page]'); if(b){page=Number(b.dataset.page);renderTransactions();}});
+  window.addEventListener('sbb:payments-refresh',()=>refresh().catch(error=>{
+    notify('Payment status was updated, but payments could not refresh: '+error.message);
+  }));
   $('paymentOrder').addEventListener('change', updateBalanceHint);
   $('paymentMethod').addEventListener('change',updateReference);
   $('recordPaymentShortcut').addEventListener('click',()=>{setError('');Sakura.openModal('recordPaymentModal');});

@@ -374,8 +374,13 @@ function ord_advance(PDO $pdo, array $data): array {
             FROM order_items WHERE order_id = ?');
         $totals->execute([$orderId]);
         $total = (int) round((float)$totals->fetchColumn() * 100);
-        $paid = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments
-            WHERE order_id = ? AND payment_status = 'Successful'");
+        $paid = $pdo->prepare("SELECT COALESCE(SUM(p.amount - COALESCE(refunds.refunded_amount, 0)), 0)
+            FROM payments AS p
+            LEFT JOIN (
+                SELECT payment_id, SUM(amount) AS refunded_amount
+                FROM payment_refunds GROUP BY payment_id
+            ) AS refunds ON refunds.payment_id = p.payment_id
+            WHERE p.order_id = ? AND p.payment_status = 'Successful'");
         $paid->execute([$orderId]);
         $received = (int) round((float)$paid->fetchColumn() * 100);
         if ($total <= 0 || $received < $total) {

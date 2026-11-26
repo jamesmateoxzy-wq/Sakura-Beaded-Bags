@@ -35,6 +35,20 @@ function pay_amount(mixed $v): string {
     }
     return number_format((float)$s, 2, '.', '');
 }
+function pay_percent(mixed $v): int {
+    if (!is_string($v) && !is_int($v) && !is_float($v)) {
+        throw new InvalidArgumentException('Enter a valid refund percentage.');
+    }
+    $s = (string)$v;
+    if (!preg_match('/^[0-9]{1,3}(\.[0-9]{1,2})?$/D', $s)) {
+        throw new InvalidArgumentException('Refund percentage must be from 0.01 to 100.00.');
+    }
+    $basisPoints = (int) round((float)$s * 100);
+    if ($basisPoints < 1 || $basisPoints > 10000) {
+        throw new InvalidArgumentException('Refund percentage must be from 0.01 to 100.00.');
+    }
+    return $basisPoints;
+}
 function pay_date(mixed $v): string {
     if (!is_string($v) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $v)) throw new InvalidArgumentException('Invalid payment date.');
     $tz = new DateTimeZone('Asia/Manila');
@@ -92,22 +106,36 @@ function pay_read(PDO $pdo): void {
         }
     }
     $payments = []; $running = [];
-    $stmt = $pdo->query('SELECT payment_id, order_id, payment_date, amount, payment_status, payment_method, reference_number
-        FROM payments ORDER BY payment_date ASC, payment_id ASC');
+    $stmt = $pdo->query('SELECT p.payment_id, p.order_id, p.payment_date, p.amount, p.payment_status,
+            p.payment_method, p.reference_number, COALESCE(refunds.refunded_amount, 0) AS refunded_amount
+        FROM payments AS p
+        LEFT JOIN (
+            SELECT payment_id, SUM(amount) AS refunded_amount
+            FROM payment_refunds GROUP BY payment_id
+        ) AS refunds ON refunds.payment_id = p.payment_id
+        ORDER BY p.payment_date ASC, p.payment_id ASC');
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $oid = (int)$r['order_id'];
         if (!isset($byOrder[$oid])) continue;
         $order = $byOrder[$oid];
         $paymentStatus = (string)$r['payment_status'];
+        $grossCents = pay_cents($r['amount']);
+        $refundedCents = $paymentStatus === 'Refunded'
+            ? $grossCents
+            : min($grossCents, pay_cents($r['refunded_amount']));
+        $netCents = max(0, $grossCents - $refundedCents);
         if ($paymentStatus === 'Successful' && $order['status'] !== 'Cancelled') {
-            $running[$oid] = ($running[$oid] ?? 0) + pay_cents($r['amount']);
+            $running[$oid] = ($running[$oid] ?? 0) + $netCents;
         }
         $balanceAfter = max(0, pay_cents($order['total']) - ($running[$oid] ?? 0));
         $payments[] = [
             'id' => pay_code((int)$r['payment_id'],'SLP'), 'rawId' => (int)$r['payment_id'],
             'orderId' => $order['id'], 'customer' => $order['customer'],
             'total' => $order['total'], 'orderPaid' => $order['paid'],
-            'amount' => (float)$r['amount'], 'balanceAfter' => $balanceAfter / 100,
+            'amount' => $netCents / 100, 'originalAmount' => $grossCents / 100,
+            'refundedAmount' => $refundedCents / 100,
+            'refundableAmount' => max(0, $grossCents - $refundedCents) / 100,
+            'balanceAfter' => $balanceAfter / 100,
             'method' => (string)$r['payment_method'],
             'reference' => (string)($r['reference_number'] ?? ''),
             'date' => substr((string)$r['payment_date'], 0, 10),
@@ -168,8 +196,13 @@ function pay_create(PDO $pdo, array $data): array {
     $totalStmt->execute([$orderId]);
     $total = pay_cents((string)$totalStmt->fetchColumn());
     if ($total <= 0) throw new InvalidArgumentException('The order has no billable items.');
-    $paidStmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM payments
-        WHERE order_id = ? AND payment_status = 'Successful'");
+    $paidStmt = $pdo->prepare("SELECT COALESCE(SUM(p.amount - COALESCE(refunds.refunded_amount, 0)), 0)
+        FROM payments AS p
+        LEFT JOIN (
+            SELECT payment_id, SUM(amount) AS refunded_amount
+            FROM payment_refunds GROUP BY payment_id
+        ) AS refunds ON refunds.payment_id = p.payment_id
+        WHERE p.order_id = ? AND p.payment_status = 'Successful'");
     $paidStmt->execute([$orderId]);
     $paid = pay_cents((string)$paidStmt->fetchColumn());
     $cents = pay_cents($amount);
@@ -192,6 +225,81 @@ function pay_create(PDO $pdo, array $data): array {
         'balance' => ($total - $paid - $cents) / 100, 'message' => 'Payment saved successfully.'];
 }
 
+function pay_create_refund(PDO $pdo, array $data): array {
+    $paymentId = pay_id($data['paymentId'] ?? null, 'payment');
+    $percent = pay_percent($data['refundPercent'] ?? null);
+    $requestKey = pay_key($data['requestKey'] ?? null);
+
+    $pdo->beginTransaction();
+    $existing = $pdo->prepare('SELECT payment_id, refund_percent, amount
+        FROM payment_refunds WHERE request_key = ? FOR UPDATE');
+    $existing->execute([$requestKey]);
+    $priorRequest = $existing->fetch(PDO::FETCH_ASSOC);
+    if ($priorRequest) {
+        if ((int)$priorRequest['payment_id'] !== $paymentId ||
+            (int)round((float)$priorRequest['refund_percent'] * 100) !== $percent) {
+            throw new InvalidArgumentException('This refund request key was already used. Refresh the page and retry.');
+        }
+        $pdo->commit();
+        return [
+            'ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+            'refundPercent' => (float)$priorRequest['refund_percent'],
+            'refundAmount' => (float)$priorRequest['amount'], 'duplicate' => true,
+            'message' => 'This refund was already recorded. No duplicate refund was added.',
+        ];
+    }
+
+    $findOrder = $pdo->prepare('SELECT order_id FROM payments WHERE payment_id = ?');
+    $findOrder->execute([$paymentId]);
+    $orderId = $findOrder->fetchColumn();
+    if ($orderId === false) throw new InvalidArgumentException('Payment was not found.');
+    $lockOrder = $pdo->prepare('SELECT order_id FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $lockOrder->execute([(int)$orderId]);
+    if (!$lockOrder->fetchColumn()) throw new InvalidArgumentException('The payment order was not found.');
+
+    $lockPayment = $pdo->prepare('SELECT payment_status, amount FROM payments WHERE payment_id = ? FOR UPDATE');
+    $lockPayment->execute([$paymentId]);
+    $payment = $lockPayment->fetch(PDO::FETCH_ASSOC);
+    if (!$payment || $payment['payment_status'] !== 'Successful') {
+        throw new InvalidArgumentException('Only successful payments can be refunded.');
+    }
+    $originalCents = pay_cents($payment['amount']);
+    $sumRefunds = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payment_refunds WHERE payment_id = ?');
+    $sumRefunds->execute([$paymentId]);
+    $alreadyRefunded = min($originalCents, pay_cents((string)$sumRefunds->fetchColumn()));
+    $refundCents = (int) round($originalCents * $percent / 10000);
+    $remainingCents = $originalCents - $alreadyRefunded;
+    if ($refundCents < 1) throw new InvalidArgumentException('The selected percentage is less than the minimum refund of ₱0.01.');
+    if ($refundCents > $remainingCents) {
+        throw new InvalidArgumentException('Refund exceeds the remaining refundable balance of ₱' .
+            number_format($remainingCents / 100, 2) . '.');
+    }
+
+    $insert = $pdo->prepare('INSERT INTO payment_refunds
+        (payment_id, request_key, refund_percent, amount) VALUES (?, ?, ?, ?)');
+    $insert->execute([
+        $paymentId, $requestKey, number_format($percent / 100, 2, '.', ''),
+        number_format($refundCents / 100, 2, '.', ''),
+    ]);
+    $fullyRefunded = $refundCents === $remainingCents;
+    if ($fullyRefunded) {
+        $update = $pdo->prepare("UPDATE payments SET payment_status = 'Refunded',
+            remarks = CONCAT_WS(CHAR(10), NULLIF(remarks, ''), 'Fully refunded through percentage refund workflow.')
+            WHERE payment_id = ?");
+        $update->execute([$paymentId]);
+    }
+    $pdo->commit();
+    return [
+        'ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
+        'refundPercent' => $percent / 100, 'refundAmount' => $refundCents / 100,
+        'refundedTotal' => ($alreadyRefunded + $refundCents) / 100,
+        'refundableBalance' => ($remainingCents - $refundCents) / 100,
+        'duplicate' => false,
+        'message' => 'Refund of ₱' . number_format($refundCents / 100, 2) .
+            ' recorded. Payment balances and sales were recalculated.',
+    ];
+}
+
 function pay_update_status(PDO $pdo, array $data): array {
     $paymentId = pay_id($data['paymentId'] ?? null, 'payment');
     $status = $data['status'] ?? null;
@@ -209,9 +317,11 @@ function pay_update_status(PDO $pdo, array $data): array {
     $lockOrder->execute([(int)$orderId]);
     if (!$lockOrder->fetchColumn()) throw new InvalidArgumentException('The payment order was not found.');
 
-    $lockPayment = $pdo->prepare('SELECT payment_status FROM payments WHERE payment_id = ? FOR UPDATE');
+    $lockPayment = $pdo->prepare('SELECT payment_status, amount FROM payments WHERE payment_id = ? FOR UPDATE');
     $lockPayment->execute([$paymentId]);
-    $currentStatus = $lockPayment->fetchColumn();
+    $paymentRow = $lockPayment->fetch(PDO::FETCH_ASSOC);
+    if (!$paymentRow) throw new InvalidArgumentException('Payment was not found.');
+    $currentStatus = (string)$paymentRow['payment_status'];
     if ($currentStatus === $status) {
         $pdo->commit();
         return ['ok' => true, 'paymentId' => pay_code($paymentId, 'SLP'),
@@ -219,6 +329,30 @@ function pay_update_status(PDO $pdo, array $data): array {
     }
     if ($currentStatus !== 'Successful') {
         throw new InvalidArgumentException('Only successful payments can be cancelled or refunded.');
+    }
+
+    if ($status === 'Refunded') {
+        $originalCents = pay_cents($paymentRow['amount']);
+        $sumRefunds = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) FROM payment_refunds WHERE payment_id = ?');
+        $sumRefunds->execute([$paymentId]);
+        $alreadyRefunded = min($originalCents, pay_cents((string)$sumRefunds->fetchColumn()));
+        $remainingCents = $originalCents - $alreadyRefunded;
+        if ($remainingCents > 0) {
+            $percent = (int) round($remainingCents * 10000 / $originalCents);
+            $dataBytes = random_bytes(16);
+            $dataBytes[6] = chr((ord($dataBytes[6]) & 15) | 64);
+            $dataBytes[8] = chr((ord($dataBytes[8]) & 63) | 128);
+            $hex = bin2hex($dataBytes);
+            $legacyRefund = $pdo->prepare('INSERT INTO payment_refunds
+                (payment_id, request_key, refund_percent, amount) VALUES (?, ?, ?, ?)');
+            $legacyRefund->execute([
+                $paymentId,
+                substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4) . '-' .
+                    substr($hex, 16, 4) . '-' . substr($hex, 20),
+                number_format($percent / 100, 2, '.', ''),
+                number_format($remainingCents / 100, 2, '.', ''),
+            ]);
+        }
     }
 
     $note = $status === 'Refunded'
@@ -244,6 +378,7 @@ try {
     $input = json_decode($raw, true);
     if (!is_array($input)) pay_fail('Invalid JSON.');
     if (($input['action'] ?? '') === 'record_payment') pay_out(pay_create($pdo, $input), 201);
+    if (($input['action'] ?? '') === 'record_refund') pay_out(pay_create_refund($pdo, $input), 201);
     if (($input['action'] ?? '') === 'update_payment_status') pay_out(pay_update_status($pdo, $input));
     pay_fail('Unknown action.');
 } catch (InvalidArgumentException $e) {

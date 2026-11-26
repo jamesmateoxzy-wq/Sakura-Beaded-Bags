@@ -174,6 +174,8 @@ require_once __DIR__ . '/../includes/header.php';
             </div>
         </section>
     </div>
+    <?php require __DIR__ . '/refund-revision.php'; ?>
+    <?php require __DIR__ . '/void-revision.php'; ?>
 </section>
 <script>
 window.SAKURA_PAYMENT_DATA = <?= json_encode(

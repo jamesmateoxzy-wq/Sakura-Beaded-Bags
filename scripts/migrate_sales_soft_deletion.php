@@ -57,6 +57,26 @@ try {
         ];
     }
 
+    $tableExists->execute([$schema, 'payment_refunds', 'BASE TABLE']);
+    $hasRefundLedger = (int) $tableExists->fetchColumn() === 1;
+    $receiptsSql = $hasRefundLedger
+        ? <<<'SQL'
+    SELECT p.order_id, SUM(p.amount - COALESCE(refunds.refunded_amount, 0)) AS total_paid
+    FROM payments AS p
+    LEFT JOIN (
+        SELECT payment_id, SUM(amount) AS refunded_amount
+        FROM payment_refunds GROUP BY payment_id
+    ) AS refunds ON refunds.payment_id = p.payment_id
+    WHERE p.payment_status = 'Successful'
+    GROUP BY p.order_id
+SQL
+        : <<<'SQL'
+    SELECT order_id, SUM(amount) AS total_paid
+    FROM payments
+    WHERE payment_status = 'Successful'
+    GROUP BY order_id
+SQL;
+
     $viewSql = <<<'SQL'
 CREATE OR REPLACE ALGORITHM=UNDEFINED SQL SECURITY INVOKER VIEW v_order_balances AS
 SELECT o.order_id, o.customer_id, o.order_date, o.production_status, o.delivery_status,
@@ -75,12 +95,8 @@ LEFT JOIN (
     FROM order_items GROUP BY order_id
 ) AS item_totals ON item_totals.order_id = o.order_id
 LEFT JOIN (
-    SELECT order_id, SUM(amount) AS total_paid
-    FROM payments
-    WHERE payment_status = 'Successful'
-    GROUP BY order_id
-) AS receipts ON receipts.order_id = o.order_id
 SQL;
+    $viewSql .= $receiptsSql . ') AS receipts ON receipts.order_id = o.order_id';
     $actions[] = ['Recalculate order balances from successful payments only', $viewSql];
 
     echo "Sakura Beaded Bags — Sales and Soft-Deletion Migration\n";
