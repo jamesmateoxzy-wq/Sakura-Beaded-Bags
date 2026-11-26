@@ -50,6 +50,11 @@
     var date = new Date(v + 'T12:00:00');
     return isNaN(date.getTime()) ? String(v) : date.toLocaleDateString('en-PH', {year:'numeric', month:'short', day:'numeric'});
   }
+  function timestampText(v, options) {
+    var date = new Date(v);
+    if (isNaN(date.getTime())) return 'Not available';
+    return new Intl.DateTimeFormat('en-PH', Object.assign({timeZone:'Asia/Manila'}, options)).format(date);
+  }
   function deliveryLabel(s) { return s === 'In Transit' ? 'Shipped' : s; }
   function badgeClass(s) {
     return ['Completed','Delivered','Paid'].includes(s) ? 'badge-green' :
@@ -201,7 +206,9 @@
     $('ordDetailCode').textContent = o.id + ' · ' + o.customerId;
     $('ordDetailCustomer').textContent = o.customer;
     $('ordDetailAddress').textContent = o.address || 'Address not provided';
-    $('ordDetailDate').textContent = dateText(o.date);
+    $('ordDetailDate').textContent = timestampText(o.createdAt, {year:'numeric', month:'long', day:'numeric'});
+    $('ordDetailTime').textContent = timestampText(o.createdAt, {hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' PHT';
+    $('ordDetailNotes').textContent = o.notes.trim() || 'No notes available.';
     $('ordDetailDueDate').textContent = dateText(o.dueDate || o.date);
     $('ordDetailProduct').textContent = itemSummary(o);
     $('ordDetailItemPrice').textContent = money(o.total);

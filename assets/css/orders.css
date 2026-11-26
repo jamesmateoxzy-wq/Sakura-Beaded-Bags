@@ -135,6 +135,9 @@
 .orders-layout .order-detail-dates div{display:flex;flex-direction:column;gap:4px}
 .orders-layout .order-detail-dates small{color:#9a858b;font-size:7px}
 .orders-layout .order-detail-dates strong{font-size:8px;font-weight:600}
+.orders-layout .order-detail-notes{margin:0 0 18px;padding:10px 12px;border-radius:8px;background:#fdf0f3}
+.orders-layout .order-detail-notes small{color:#9a858b;font-size:8px}
+.orders-layout .order-detail-notes p{margin-top:5px;color:#6b5960;font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere}
 .orders-layout .order-detail-item{padding:21px 12px;border-radius:8px;background:#fdf0f3}
 .orders-layout .order-detail-product{display:flex;justify-content:space-between;gap:12px;font-size:10px}
 .orders-layout .order-detail-product strong:last-child{color:#d34f7c}

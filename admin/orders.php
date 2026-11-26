@@ -126,7 +126,8 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="modal-body order-detail-body">
         <input type="hidden" id="ordDetailId">
         <div class="order-customer-block"><h3 id="ordDetailCustomer"></h3><p id="ordDetailAddress"></p></div>
-        <div class="order-detail-dates"><div><small>Order date</small><strong id="ordDetailDate"></strong></div><div><small>Delivery date</small><strong id="ordDetailDueDate"></strong></div></div>
+        <div class="order-detail-dates"><div><small>Created date</small><strong id="ordDetailDate"></strong></div><div><small>Created time</small><strong id="ordDetailTime"></strong></div><div><small>Delivery date</small><strong id="ordDetailDueDate"></strong></div></div>
+        <div class="order-detail-notes"><small>Notes</small><p id="ordDetailNotes"></p></div>
         <div class="order-detail-item">
           <div class="order-detail-product"><strong id="ordDetailProduct"></strong><strong id="ordDetailItemPrice">₱0</strong></div>
           <div class="order-detail-status"><span id="ordDetailProduction" class="badge badge-amber"></span><span id="ordDetailDelivery" class="badge badge-blue"></span><button type="button" class="order-view-bom" id="ordViewBom">View BOM</button></div>

@@ -6,8 +6,14 @@
   const api = 'api/payments.php';
   const peso = value => '₱' + Number(value || 0).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const cents = n => Math.round(Number(n || 0) * 100);
+  const timestampPart = (value, options) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Not available' :
+      new Intl.DateTimeFormat('en-PH', Object.assign({timeZone:'Asia/Manila'}, options)).format(date);
+  };
+  const paymentDateTime = value => timestampPart(value, {year:'numeric', month:'short', day:'numeric'}) +
+    ', ' + timestampPart(value, {hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' PHT';
   const notify = message => { if (window.Sakura && typeof Sakura.toast === 'function') Sakura.toast(message); };
   let orders = [], payments = [], summary = {}, csrf = '', busy = false, page = 1, chosenSlip = '', requestKey = '';
   const pageSize = 5;
@@ -88,7 +94,7 @@
         ? '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Cancelled" data-payment-id="' + esc(p.rawId) + '">Void</button> ' +
           '<button type="button" class="btn btn-outline btn-sm" data-payment-status="Refunded" data-payment-id="' + esc(p.rawId) + '">Refund</button>'
         : '—';
-      return `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(p.date)}</td><td>${statusBadge(state)}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.id)}">View Slip</button> ${actions}</td></tr>`;
+      return `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(p.customer)}</td><td>${peso(p.total)}</td><td>${peso(p.amount)}</td><td>${peso(p.balanceAfter)}</td><td>${esc(p.method)}</td><td>${esc(paymentDateTime(p.timestamp))}</td><td>${statusBadge(state)}</td><td><button type="button" class="btn btn-outline btn-sm" data-slip="${esc(p.id)}">View Slip</button> ${actions}</td></tr>`;
     }).join('');
     $('paymentEmpty').hidden = rows.length > 0;
     $('paymentEmpty').textContent = payments.length ? 'No payments match your search or filter.' : 'No payment records yet.';
@@ -103,7 +109,10 @@
     if (!p) return;
     $('slipCustomer').textContent = p.customer;
     $('slipOrder').textContent = p.orderId + ' · ' + p.id;
-    $('slipDate').textContent = p.date;
+    $('slipPaymentDate').textContent = 'Payment Date: ' +
+      timestampPart(p.timestamp, {year:'numeric', month:'long', day:'numeric'});
+    $('slipPaymentTime').textContent = 'Payment Time: ' +
+      timestampPart(p.timestamp, {hour:'numeric', minute:'2-digit', second:'2-digit', hour12:true}) + ' PHT';
     $('slipReference').textContent = p.reference || '—';
     $('slipTotal').textContent = peso(p.total);
     $('slipPaid').textContent = peso(p.amount);
@@ -127,12 +136,10 @@
     if (cents(amountText) > balance(order)) throw new Error('Payment exceeds the remaining balance of ' + peso(order.balance) + '.');
     const method = $('paymentMethod').value;
     if (!['GCash','Bank Transfer'].includes(method)) throw new Error('Select a valid method.');
-    const date = $('paymentDate').value;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today() || date < order.date) throw new Error('Payment date must be between order date and today.');
     const reference = $('paymentReference').value.trim();
     if (!reference) throw new Error('GCash and bank transfers require a reference.');
     if (reference.length > 80) throw new Error('Reference must be 80 characters or fewer.');
-    return {action:'record_payment', orderId:order.rawId, amount:amountText, method, date, reference, requestKey};
+    return {action:'record_payment', orderId:order.rawId, amount:amountText, method, reference, requestKey};
   }
   $('paymentSearch').addEventListener('input', () => {page=1; renderTransactions();});
   $('paymentFilter').addEventListener('change', () => {page=1; renderTransactions();});
@@ -177,7 +184,6 @@
       const result = await request('POST',payload);
       requestKey = '';
       $('recordPaymentForm').reset();
-      $('paymentDate').value=today();
       updateReference();
       $('paymentSearch').value='';$('paymentFilter').value='all';page=1;
       await refresh(result.paymentId);
@@ -188,7 +194,6 @@
     finally { busy=false; renderOrderOptions(); }
   });
   saveBtn.disabled=true;
-  $('paymentDate').max=today();$('paymentDate').value=today();
   updateReference();
   refresh().then(()=>{
     const banner = document.querySelector('.pay-mode-banner');

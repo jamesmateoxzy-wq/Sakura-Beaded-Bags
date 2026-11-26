@@ -92,7 +92,7 @@ require_once __DIR__ . '/../includes/header.php';
                         <th scope="col">Paid</th>
                         <th scope="col">Balance</th>
                         <th scope="col">Method</th>
-                        <th scope="col">Date</th>
+                        <th scope="col">Date &amp; Time (PHT)</th>
                         <th scope="col">Status</th>
                         <th scope="col">Action</th>
                     </tr>
@@ -127,16 +127,12 @@ require_once __DIR__ . '/../includes/header.php';
                             <option value="Bank Transfer">Bank Transfer</option>
                         </select>
                     </div>
-                    <div class="field">
-                        <label for="paymentDate">Payment date <span class="req">*</span></label>
-                        <input class="input" id="paymentDate" name="date" type="date" required value="<?= e(date('Y-m-d')) ?>">
-                    </div>
                     <div class="field pay-reference-field">
                         <label for="paymentReference">Reference <span id="referenceRequired" class="req">*</span></label>
                         <input class="input" id="paymentReference" name="reference" type="text" maxlength="80" placeholder="GCash / bank reference" autocomplete="off">
                     </div>
                 </div>
-                <p class="pay-help">A transaction reference is required for GCash and bank transfers.</p>
+                <p class="pay-help">The payment timestamp is recorded automatically when saved. A transaction reference is required for GCash and bank transfers.</p>
                 <p id="paymentFormError" class="pay-error" role="alert" hidden></p>
                 <div class="pay-form-actions">
                     <span id="balanceHint">Select an unpaid order to see its balance.</span>
@@ -160,7 +156,8 @@ require_once __DIR__ . '/../includes/header.php';
                         <span id="slipOrder"></span>
                     </div>
                     <div class="pay-slip-meta-right">
-                        <span id="slipDate"></span>
+                        <span id="slipPaymentDate"></span>
+                        <span id="slipPaymentTime"></span>
                         <span id="slipReference"></span>
                     </div>
                 </div>

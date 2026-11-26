@@ -124,12 +124,15 @@ function ord_get(PDO $pdo): void {
         ORDER BY o.order_id DESC LIMIT 100')->fetchAll();
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
+        $createdAt = new DateTimeImmutable((string) $r['order_date'], new DateTimeZone('UTC'));
         $orders[$id] = [
             'id' => sprintf('ORD-%03d', $id), 'rawId' => $id,
             'customer' => $r['full_name'], 'customerId' => sprintf('CUST-%03d', (int) $r['customer_id']),
             'address' => (string) ($r['delivery_address'] ?? ''),
             'notes' => (string) ($r['notes'] ?? ''),
-            'date' => substr((string) $r['order_date'], 0, 10), 'dueDate' => $r['due_date'],
+            'createdAt' => $createdAt->format(DateTimeInterface::ATOM),
+            'date' => $createdAt->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d'),
+            'dueDate' => $r['due_date'],
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
             'payment' => $r['payment_status'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
@@ -435,6 +438,7 @@ function ord_unarchive(PDO $pdo, array $data): array {
 
 try {
     $pdo = sbb_db();
+    $pdo->exec("SET time_zone = '+00:00'");
     if ($method === 'GET') ord_get($pdo);
     if (!str_starts_with(strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? '')), 'application/json')) {
         ord_fail('JSON content type required.', 415);

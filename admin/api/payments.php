@@ -90,9 +90,11 @@ function pay_read(PDO $pdo): void {
     $sales = 0; $received = 0; $outstanding = 0; $orderValue = 0;
     foreach ($rows as $r) {
         $id = (int)$r['order_id'];
+        $orderDate = new DateTimeImmutable((string)$r['order_date'], new DateTimeZone('UTC'));
         $item = [
             'id' => pay_code($id, 'ORD'), 'rawId' => $id, 'customer' => (string)$r['full_name'],
-            'date' => substr((string)$r['order_date'], 0, 10), 'dueDate' => (string)($r['due_date'] ?? ''),
+            'date' => $orderDate->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d'),
+            'dueDate' => (string)($r['due_date'] ?? ''),
             'total' => (float)$r['order_total'], 'paid' => (float)$r['amount_paid'],
             'balance' => (float)$r['balance_due'], 'status' => (string)$r['production_status'],
             'paymentStatus' => (string)$r['payment_status'], 'archived' => $r['archived_at'] !== null,
@@ -117,6 +119,7 @@ function pay_read(PDO $pdo): void {
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $oid = (int)$r['order_id'];
         if (!isset($byOrder[$oid])) continue;
+        $paymentDate = new DateTimeImmutable((string)$r['payment_date'], new DateTimeZone('UTC'));
         $order = $byOrder[$oid];
         $paymentStatus = (string)$r['payment_status'];
         $grossCents = pay_cents($r['amount']);
@@ -138,7 +141,8 @@ function pay_read(PDO $pdo): void {
             'balanceAfter' => $balanceAfter / 100,
             'method' => (string)$r['payment_method'],
             'reference' => (string)($r['reference_number'] ?? ''),
-            'date' => substr((string)$r['payment_date'], 0, 10),
+            'date' => $paymentDate->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d'),
+            'timestamp' => $paymentDate->format(DateTimeInterface::ATOM),
             'paymentStatus' => $paymentStatus,
             'status' => $balanceAfter === 0 ? 'Fully Paid' : 'Partial',
         ];
@@ -160,7 +164,6 @@ function pay_read(PDO $pdo): void {
 function pay_create(PDO $pdo, array $data): array {
     $orderId = pay_id($data['orderId'] ?? null, 'order');
     $amount = pay_amount($data['amount'] ?? null);
-    $date = pay_date($data['date'] ?? null);
     $method = $data['method'] ?? null;
     if (!is_string($method) || !in_array($method, ['GCash','Bank Transfer'], true)) {
         throw new InvalidArgumentException('Select a valid payment method.');
@@ -184,14 +187,11 @@ function pay_create(PDO $pdo, array $data): array {
             'message' => 'Payment was already saved. No second payment recorded.', 'duplicate' => true];
     }
     // Lock the order BEFORE calculating balance; serializes concurrent payments for the same order.
-    $lock = $pdo->prepare('SELECT production_status, DATE(order_date) AS ordered_on FROM customer_orders
-        WHERE order_id = ? FOR UPDATE');
+    $lock = $pdo->prepare('SELECT production_status FROM customer_orders WHERE order_id = ? FOR UPDATE');
     $lock->execute([$orderId]);
     $order = $lock->fetch(PDO::FETCH_ASSOC);
     if (!$order) throw new InvalidArgumentException('Order does not exist.');
     if ($order['production_status'] === 'Cancelled') throw new InvalidArgumentException('Cannot accept payment for a cancelled order.');
-    if ($date < $order['ordered_on']) throw new InvalidArgumentException('Payment date cannot be before order date.');
-
     $totalStmt = $pdo->prepare('SELECT COALESCE(SUM(quantity * unit_price), 0) FROM order_items WHERE order_id = ?');
     $totalStmt->execute([$orderId]);
     $total = pay_cents((string)$totalStmt->fetchColumn());
@@ -214,9 +214,9 @@ function pay_create(PDO $pdo, array $data): array {
         $dup->execute([$method, $reference]);
         if ($dup->fetchColumn()) throw new InvalidArgumentException('That reference is already used with this payment method.');
     }
-    $insert = $pdo->prepare('INSERT INTO payments (order_id, payment_date, amount, payment_method, reference_number)
-        VALUES (?, ?, ?, ?, ?)');
-    $insert->execute([$orderId, $date . ' 12:00:00', $amount, $method, $reference ?: null]);
+    $insert = $pdo->prepare('INSERT INTO payments (order_id, amount, payment_method, reference_number)
+        VALUES (?, ?, ?, ?)');
+    $insert->execute([$orderId, $amount, $method, $reference ?: null]);
     $paymentId = (int)$pdo->lastInsertId();
     $mark = $pdo->prepare('UPDATE payment_submission_keys SET payment_id = ? WHERE request_key = ?');
     $mark->execute([$paymentId, $key]);
@@ -369,6 +369,7 @@ function pay_update_status(PDO $pdo, array $data): array {
 
 try {
     $pdo = sbb_db();
+    $pdo->exec("SET time_zone = '+00:00'");
     if ($method === 'GET') pay_read($pdo);
     if (!str_starts_with(strtolower((string)($_SERVER['CONTENT_TYPE'] ?? '')), 'application/json')) pay_fail('JSON required.', 415);
     $token = (string)($_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
