@@ -67,7 +67,6 @@ $loginUri = $scheme . '://' . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SC
              data-client-id="<?= e(GOOGLE_CLIENT_ID) ?>"
              data-login-uri="<?= e($loginUri) ?>"></div>
       </div>
-      <p class="login-note">Only authorized Sakura admin accounts can sign in.</p>
 
       <?php if (DEMO_MODE): ?>
         <a class="demo-link" href="login.php?demo=1">Preview without Google (demo)</a>
