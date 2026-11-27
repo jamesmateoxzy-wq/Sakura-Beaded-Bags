@@ -25,7 +25,7 @@ require_once __DIR__ . '/../includes/header.php';
   <section class="orders-current" aria-labelledby="ordCurrentTitle">
     <div class="orders-current-heading">
       <h2 id="ordCurrentTitle">Current Orders (FIFO)</h2>
-      <p>Oldest accepted orders are made first. Select a card to view its details.</p>
+      <p>Rush orders appear first. Orders within each priority are listed oldest first.</p>
     </div>
     <div class="orders-cards" id="ordCards"></div>
   </section>
@@ -74,6 +74,14 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="order-field order-field-notes"><label for="ordNotes">Notes</label><div class="order-control"><textarea class="textarea" id="ordNotes" rows="2" placeholder="Add order notes"></textarea><button type="button" class="mini-edit" data-focus="ordNotes" aria-label="Edit notes"><?= icon('edit') ?></button></div></div>
           </div>
 
+          <div class="order-field order-priority-field">
+            <label for="ordPriority">Order Priority</label>
+            <select class="select" id="ordPriority" aria-describedby="ordRushHint">
+              <option value="0" selected>Standard</option>
+              <option value="1">Rush Order</option>
+            </select>
+            <small id="ordRushHint" aria-live="polite" hidden>This order will appear ahead of standard orders in the active queue.</small>
+          </div>
           <div class="order-bom-head"><div><h3 id="ordBomTitle">Bill of Materials</h3><p class="order-material-meta">Products sets the recipe, labor, packaging and down-payment policy. Orders use those saved values.</p></div></div>
           <div class="order-bom-wrap">
             <table class="order-bom-table"><thead><tr><th>Material</th><th>Qty</th><th>Unit cost</th><th>Subtotal</th><th></th></tr></thead><tbody id="ordBomRows"></tbody></table>
@@ -120,13 +128,23 @@ require_once __DIR__ . '/../includes/header.php';
   <div class="modal-overlay order-overlay" id="ordDetailModal" role="dialog" aria-modal="true" aria-labelledby="ordDetailTitle">
     <div class="modal order-modal order-detail-modal">
       <div class="modal-head order-dialog-head">
-        <div><h2 id="ordDetailTitle">Order Details</h2><p class="order-detail-code" id="ordDetailCode"></p></div>
+        <div><h2 id="ordDetailTitle">Order Details</h2><p class="order-detail-code"><span id="ordDetailCode"></span><span id="ordDetailRush" class="order-rush-label" hidden>Rush Order</span></p></div>
         <button type="button" class="icon-btn" data-close-modal="ordDetailModal" aria-label="Close"><?= icon('x') ?></button>
       </div>
       <div class="modal-body order-detail-body">
         <input type="hidden" id="ordDetailId">
         <div class="order-customer-block"><h3 id="ordDetailCustomer"></h3><p id="ordDetailAddress"></p></div>
         <div class="order-detail-dates"><div><small>Created date</small><strong id="ordDetailDate"></strong></div><div><small>Created time</small><strong id="ordDetailTime"></strong></div><div><small>Delivery date</small><strong id="ordDetailDueDate"></strong></div></div>
+        <form id="ordPriorityForm" class="order-priority-field order-priority-edit" hidden>
+          <div class="order-field">
+            <label for="ordEditPriority">Order Priority</label>
+            <select class="select" id="ordEditPriority">
+              <option value="0">Standard</option>
+              <option value="1">Rush Order</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-outline" id="ordSavePriority">Save Priority</button>
+        </form>
         <div class="order-detail-notes"><small>Notes</small><p id="ordDetailNotes"></p></div>
         <div class="order-detail-item">
           <div class="order-detail-product"><strong id="ordDetailProduct"></strong><strong id="ordDetailItemPrice">₱0</strong></div>

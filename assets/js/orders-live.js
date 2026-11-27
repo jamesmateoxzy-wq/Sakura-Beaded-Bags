@@ -135,6 +135,7 @@
   }
   function resetNewForm() {
     $('ordCreateForm').reset();
+    $('ordRushHint').hidden = true;
     $('ordId').value = orderNumber(orders.reduce(function (max, o) { return Math.max(max, Number(o.rawId) || 0); }, 0) + 1) + ' (preview)';
     $('ordCustomer').value = '';
     $('ordAddress').value = '';
@@ -152,6 +153,17 @@
     return !archived(o) && o.delivery !== 'Delivered' &&
       ['Pending','In Production','Ready','Completed','Cancelled'].includes(o.status);
   }
+  function inActiveQueue(o) {
+    return !archived(o) && ['Pending', 'In Production', 'Ready'].includes(o.status) &&
+      !['Delivered', 'Returned'].includes(o.delivery);
+  }
+  function compareQueue(a, b) {
+    return Number(Boolean(b.isRush)) - Number(Boolean(a.isRush)) ||
+      Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.rawId - b.rawId;
+  }
+  function rushLabel(o) {
+    return o.isRush ? '<span class="order-rush-label">Rush Order</span>' : '';
+  }
   function itemSummary(o) {
     return (o.items || []).map(function (v) { return v.product + ' ×' + v.qty; }).join(', ') || 'No items';
   }
@@ -164,7 +176,15 @@
         (activeGroup === 'archived' && archived(o));
       return inGroup && (filter === 'all' || o.status === filter || (filter === 'In Progress' && o.status === 'In Production') || (filter === 'Delivered' && o.delivery === 'Delivered') || (filter === 'In Transit' && o.delivery === 'In Transit')) &&
         (!query || (o.id + ' ' + o.customer + ' ' + itemSummary(o)).toLowerCase().includes(query));
-    }).sort(function (a,b) { return Number(a.rawId) - Number(b.rawId); });
+    }).sort(function (a, b) {
+      if (activeGroup === 'production') {
+        var aActive = inActiveQueue(a);
+        var bActive = inActiveQueue(b);
+        if (aActive && bActive) return compareQueue(a, b);
+        if (aActive !== bActive) return Number(bActive) - Number(aActive);
+      }
+      return a.rawId - b.rawId;
+    });
     $('ordTotal').textContent = orders.filter(function (o) {
       return !archived(o);
     }).length;
@@ -174,17 +194,17 @@
     $('ordNew').hidden = isArchiveView;
     $('ordArchiveActions').hidden = !isArchiveView;
     $('ordRows').innerHTML = shown.map(function (o) {
-      return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + '</td><td>' + dateText(o.date) +
+      return '<tr' + (archived(o) ? '' : ' data-view="' + esc(o.id) + '"') + '><td>' + esc(o.id) + rushLabel(o) + '</td><td>' + dateText(o.date) +
         '</td><td>' + esc(o.customer) + '</td><td>' + esc(itemSummary(o)) + '</td><td>' + money(o.total) +
         '</td><td>' + badge(o.status) + '</td><td>' + badge(deliveryLabel(o.delivery)) + '</td><td>' + badge(o.payment) + '</td>' + (isArchiveView ? '<td><button type="button" class="btn btn-outline btn-sm" data-unarchive="' + esc(o.id) + '"' + (busy ? ' disabled' : '') + '>Remove from Archive</button></td>' : '') + '</tr>';
     }).join('');
     $('ordEmpty').hidden = shown.length > 0;
     $('ordEmpty').textContent = orders.length ? 'No orders match your search or filter.' : 'No orders yet. Create an order to start.';
-    var cards = orders.filter(currentProduction).sort(function (a,b) { return Number(a.rawId)-Number(b.rawId); }).slice(0,3);
+    var cards = orders.filter(inActiveQueue).sort(compareQueue).slice(0, 3);
     $('ordCards').innerHTML = cards.map(function (o,i) {
       return '<article class="order-card' + (o.id === activeOrderId ? ' is-highlighted' : '') + '" data-view="' + esc(o.id) +
         '" tabindex="0" role="button" aria-label="View order ' + esc(o.id) + '">' +
-        '<div class="order-card-top"><span class="order-number">' + formatId(i+1) + '</span><span>' + esc(o.id) + '</span></div>' +
+        '<div class="order-card-top"><span class="order-number">' + formatId(i+1) + '</span><span>' + esc(o.id) + rushLabel(o) + '</span></div>' +
         '<h3>' + esc(o.customer) + '</h3><div class="order-card-product"><span>' + esc(itemSummary(o)) +
         '</span><strong>' + money(o.total) + '</strong></div><p class="order-card-due">Due ' + dateText(o.dueDate || o.date) + '</p>' +
         '<div class="order-card-badges">' + badge(o.status) + badge(o.payment) + '</div>' +
@@ -204,6 +224,10 @@
     renderOrders();
     $('ordDetailId').value = o.rawId;
     $('ordDetailCode').textContent = o.id + ' · ' + o.customerId;
+    $('ordDetailRush').hidden = !o.isRush;
+    $('ordPriorityForm').hidden = !inActiveQueue(o);
+    $('ordEditPriority').value = o.isRush ? '1' : '0';
+    $('ordSavePriority').disabled = busy;
     $('ordDetailCustomer').textContent = o.customer;
     $('ordDetailAddress').textContent = o.address || 'Address not provided';
     $('ordDetailDate').textContent = timestampText(o.createdAt, {year:'numeric', month:'long', day:'numeric'});
@@ -395,6 +419,33 @@
     resetNewForm();
     openModal('ordCreateModal');
   });
+  $('ordPriority').addEventListener('change', function () {
+    $('ordRushHint').hidden = this.value !== '1';
+  });
+  $('ordPriorityForm').addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (busy || !detailOrder || !inActiveQueue(detailOrder)) return;
+    var order = detailOrder;
+    var saveButton = $('ordSavePriority');
+    busy = true;
+    saveButton.disabled = true;
+    try {
+      var response = await submitAction({
+        action: 'update_priority',
+        orderId: order.rawId,
+        isRush: Number($('ordEditPriority').value)
+      });
+      closeModal('ordDetailModal');
+      detailOrder = null;
+      notify(response.message);
+      await loadData();
+    } catch (error) {
+      notify(error.message);
+    } finally {
+      busy = false;
+      saveButton.disabled = false;
+    }
+  });
   $('ordProduct').addEventListener('change', syncProduct);
   $('ordQty').addEventListener('input', renderBom);
   $('ordSearch').addEventListener('input', renderOrders);
@@ -427,7 +478,8 @@
     var payload = {
       action:'create_order', customer:$('ordCustomer').value.trim(),
       address:$('ordAddress').value.trim(), productId:p.id, quantity:qty,
-      dueDate:date, notes:$('ordNotes').value.trim(), requestKey:requestKey
+      dueDate:date, notes:$('ordNotes').value.trim(), requestKey:requestKey,
+      isRush:Number($('ordPriority').value)
     };
     busy = true; if (submitButton) submitButton.disabled = true;
     warn('');

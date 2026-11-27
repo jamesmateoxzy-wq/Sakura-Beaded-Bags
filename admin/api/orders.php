@@ -1,6 +1,6 @@
 <?php
 /**
- * SBB Orders MySQL API. GET catalog/orders; POST create/cancel/archive/advance.
+ * SBB Orders MySQL API. GET catalog/orders; POST create/cancel/archive/advance/priority.
  * Requires scripts/migrate_order_requests.php --apply for idempotency.
  * This prototype allocates/deducts BOM on creation and returns it on cancellation.
  * No customer payments are recorded here.
@@ -50,6 +50,10 @@ function ord_key(mixed $v): string {
         throw new InvalidArgumentException('Invalid order request key. Reload and retry.');
     }
     return strtolower($v);
+}
+function ord_priority(mixed $value): int {
+    if (!in_array($value, [0, 1], true)) throw new InvalidArgumentException('Choose Standard or Rush Order.');
+    return $value;
 }
 function ord_csrf(): string {
     if (empty($_SESSION['sbb_orders_csrf'])) $_SESSION['sbb_orders_csrf'] = bin2hex(random_bytes(32));
@@ -114,14 +118,21 @@ function ord_get(PDO $pdo): void {
     }
 
     $orders = [];
-    $rows = $pdo->query('SELECT o.order_id, o.order_date, o.due_date,
-            o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at,
+    $rows = $pdo->query("SELECT o.order_id, o.order_date, o.due_date,
+            o.production_status, o.delivery_status, o.delivery_address, o.notes, o.archived_at, o.is_rush,
             c.customer_id, c.full_name,
             b.order_total, b.amount_paid, b.balance_due, b.payment_status
         FROM customer_orders o
         JOIN customers c ON c.customer_id = o.customer_id
         JOIN v_order_balances b ON b.order_id = o.order_id
-        ORDER BY o.order_id DESC LIMIT 100')->fetchAll();
+        LEFT JOIN (
+            SELECT order_id FROM customer_orders ORDER BY order_id DESC LIMIT 100
+        ) recent ON recent.order_id = o.order_id
+        WHERE recent.order_id IS NOT NULL
+            OR (o.archived_at IS NULL
+                AND o.production_status IN ('Pending', 'In Production', 'Ready')
+                AND o.delivery_status NOT IN ('Delivered', 'Returned'))
+        ORDER BY o.order_id DESC")->fetchAll();
     foreach ($rows as $r) {
         $id = (int) $r['order_id'];
         $createdAt = new DateTimeImmutable((string) $r['order_date'], new DateTimeZone('UTC'));
@@ -132,7 +143,7 @@ function ord_get(PDO $pdo): void {
             'notes' => (string) ($r['notes'] ?? ''),
             'createdAt' => $createdAt->format(DateTimeInterface::ATOM),
             'date' => $createdAt->setTimezone(new DateTimeZone('Asia/Manila'))->format('Y-m-d'),
-            'dueDate' => $r['due_date'],
+            'dueDate' => $r['due_date'], 'isRush' => (bool) $r['is_rush'],
             'status' => $r['production_status'], 'delivery' => $r['delivery_status'],
             'payment' => $r['payment_status'],
             'total' => (float) $r['order_total'], 'paid' => (float) $r['amount_paid'],
@@ -188,6 +199,7 @@ function ord_create(PDO $pdo, array $data): array {
     $notes = $data['notes'] ?? '';
     if (!is_string($notes) || strlen($notes) > 2000) throw new InvalidArgumentException('Notes must be 2,000 characters or fewer.');
     $requestKey = ord_key($data['requestKey'] ?? null);
+    $isRush = ord_priority($data['isRush'] ?? 0);
 
     $pdo->beginTransaction();
     // Unique key serializes identical retries, preventing duplicate orders/stock deductions.
@@ -244,9 +256,9 @@ function ord_create(PDO $pdo, array $data): array {
     $stmt->execute([$customer, $address]);
     $customerId = (int) $pdo->lastInsertId();
     $stmt = $pdo->prepare("INSERT INTO customer_orders
-            (customer_id, due_date, production_status, delivery_status, delivery_address, notes)
-        VALUES (?, ?, 'Pending', 'Not Scheduled', ?, ?)");
-    $stmt->execute([$customerId, $dueDate, $address, trim($notes)]);
+            (customer_id, due_date, production_status, delivery_status, delivery_address, notes, is_rush)
+        VALUES (?, ?, 'Pending', 'Not Scheduled', ?, ?, ?)");
+    $stmt->execute([$customerId, $dueDate, $address, trim($notes), $isRush]);
     $orderId = (int) $pdo->lastInsertId();
     $stmt = $pdo->prepare('INSERT INTO order_items
         (order_id, product_id, quantity, unit_price, estimated_unit_cost) VALUES (?, ?, ?, ?, ?)');
@@ -410,6 +422,24 @@ function ord_advance(PDO $pdo, array $data): array {
         'message' => sprintf('Order %s updated to %s. Saved to MySQL.', sprintf('ORD-%03d', $orderId), $newStatus)];
 }
 
+function ord_update_priority(PDO $pdo, array $data): array {
+    $orderId = ord_id($data['orderId'] ?? null, 'order');
+    $isRush = ord_priority($data['isRush'] ?? null);
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare('SELECT production_status, delivery_status, archived_at
+        FROM customer_orders WHERE order_id = ? FOR UPDATE');
+    $stmt->execute([$orderId]);
+    $order = $stmt->fetch();
+    if (!$order || $order['archived_at'] !== null ||
+        !in_array($order['production_status'], ['Pending', 'In Production', 'Ready'], true) ||
+        in_array($order['delivery_status'], ['Delivered', 'Returned'], true)) {
+        throw new InvalidArgumentException('Only active production orders can change priority.');
+    }
+    $pdo->prepare('UPDATE customer_orders SET is_rush = ? WHERE order_id = ?')->execute([$isRush, $orderId]);
+    $pdo->commit();
+    return ['ok' => true, 'message' => 'Order priority saved.'];
+}
+
 function ord_archive(PDO $pdo, array $data): array {
     $orderId = ord_id($data['orderId'] ?? null, 'order');
     $stmt = $pdo->prepare("UPDATE customer_orders SET archived_at = COALESCE(archived_at, CURRENT_TIMESTAMP)
@@ -451,6 +481,7 @@ try {
     if (!is_array($data)) ord_fail('Invalid request body.');
     $action = $data['action'] ?? '';
     if ($action === 'create_order') ord_out(ord_create($pdo, $data), 201);
+    if ($action === 'update_priority') ord_out(ord_update_priority($pdo, $data));
     if ($action === 'cancel_order') ord_out(ord_cancel($pdo, $data));
     if ($action === 'archive_order') ord_out(ord_archive($pdo, $data));
     if ($action === 'unarchive_order') ord_out(ord_unarchive($pdo, $data));
