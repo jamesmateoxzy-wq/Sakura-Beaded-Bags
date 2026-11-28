@@ -87,7 +87,7 @@ function pay_read(PDO $pdo): void {
         JOIN v_order_balances b ON b.order_id = o.order_id
         ORDER BY o.order_id DESC")->fetchAll(PDO::FETCH_ASSOC);
     $orders = []; $byOrder = [];
-    $sales = 0; $received = 0; $outstanding = 0; $orderValue = 0;
+    $sales = 0; $received = 0; $orderValue = 0;
     foreach ($rows as $r) {
         $id = (int)$r['order_id'];
         $orderDate = new DateTimeImmutable((string)$r['order_date'], new DateTimeZone('UTC'));
@@ -104,9 +104,9 @@ function pay_read(PDO $pdo): void {
             $orderValue += pay_cents($r['order_total']);
             $sales += pay_cents($r['amount_paid']);
             $received += pay_cents($r['amount_paid']);
-            $outstanding += pay_cents($r['balance_due']);
         }
     }
+    $outstanding = max(0, $orderValue - $received);
     $payments = []; $running = [];
     $stmt = $pdo->query('SELECT p.payment_id, p.order_id, p.payment_date, p.amount, p.payment_status,
             p.payment_method, p.reference_number, COALESCE(refunds.refunded_amount, 0) AS refunded_amount
@@ -130,7 +130,9 @@ function pay_read(PDO $pdo): void {
         if ($paymentStatus === 'Successful' && $order['status'] !== 'Cancelled') {
             $running[$oid] = ($running[$oid] ?? 0) + $netCents;
         }
-        $balanceAfter = max(0, pay_cents($order['total']) - ($running[$oid] ?? 0));
+        $balanceAfter = $order['status'] === 'Cancelled'
+            ? 0
+            : max(0, pay_cents($order['total']) - ($running[$oid] ?? 0));
         $payments[] = [
             'id' => pay_code((int)$r['payment_id'],'SLP'), 'rawId' => (int)$r['payment_id'],
             'orderId' => $order['id'], 'customer' => $order['customer'],

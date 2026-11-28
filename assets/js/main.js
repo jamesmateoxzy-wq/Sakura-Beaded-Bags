@@ -51,7 +51,6 @@ window.Sakura = (function () {
     if (openBtn) { openModal(openBtn.getAttribute('data-open-modal')); return; }
     var closeBtn = e.target.closest('[data-close-modal]');
     if (closeBtn) { closeModal(closeBtn.getAttribute('data-close-modal')); return; }
-    if (e.target.classList && e.target.classList.contains('modal-overlay')) closeModal(e.target.id);
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && openStack.length) closeModal(openStack[openStack.length - 1]);
