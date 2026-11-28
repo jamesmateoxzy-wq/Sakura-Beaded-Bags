@@ -98,5 +98,52 @@ require_once __DIR__ . '/../includes/header.php';
       <small id="repPrepared">No report data yet · Currency: PHP (₱)</small>
     </section>
   </div>
+
+  <section class="rep-ledger" id="reportLedger" aria-labelledby="ledgerTitle">
+    <div class="rep-ledger-toolbar">
+      <div class="rep-ledger-tabs" role="group" aria-label="Ledger reporting period">
+        <button type="button" data-ledger-range="weekly" aria-pressed="true">Weekly</button>
+        <button type="button" data-ledger-range="monthly" aria-pressed="false">Monthly</button>
+        <button type="button" data-ledger-range="yearly" aria-pressed="false">Yearly</button>
+      </div>
+      <label>
+        <span class="sr-only">Select ledger period</span>
+        <select class="rep-ledger-period" id="ledgerPeriod" aria-label="Select ledger period" disabled>
+          <option>Loading ledger…</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="rep-ledger-heading">
+      <div>
+        <h2 id="ledgerTitle">Sales Ledger</h2>
+        <p id="ledgerSubtitle">Successful payments recorded for the selected period.</p>
+      </div>
+      <button type="button" class="btn btn-outline" id="ledgerPrint" disabled>Print ledger</button>
+    </div>
+
+    <div class="rep-ledger-summary" aria-label="Selected period sales summary">
+      <article class="card"><span>Total sales received</span><strong id="ledgerSales">₱0.00</strong></article>
+      <article class="card"><span>Sales transactions</span><strong id="ledgerCount">0</strong></article>
+    </div>
+
+    <section class="card rep-ledger-card" aria-label="Sales transactions">
+      <div class="rep-ledger-card-head"><h2 id="ledgerTableTitle">Weekly transactions</h2></div>
+      <p class="rep-ledger-status" id="ledgerStatus" role="status">Loading sales ledger…</p>
+      <div class="rep-ledger-content" id="ledgerContent" hidden>
+        <div class="table-wrap">
+          <table class="table rep-ledger-table">
+            <thead>
+              <tr><th>Date</th><th>Reference</th><th>Category</th><th>Description</th><th>Debit</th><th>Credit (PHP)</th><th>Balance</th></tr>
+            </thead>
+            <tbody id="ledgerRows"></tbody>
+          </table>
+        </div>
+        <p class="rep-ledger-empty" id="ledgerEmpty" hidden>No sales recorded in this period.</p>
+        <div class="rep-ledger-total"><strong>Period sales total</strong><strong id="ledgerPeriodTotal">₱0.00</strong></div>
+      </div>
+    </section>
+    <p class="rep-ledger-note">Sales are based on successful payments for non-cancelled orders. Refunded and cancelled payments are excluded. This ledger is a payment record, not audited financial statements.</p>
+  </section>
 </section>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>

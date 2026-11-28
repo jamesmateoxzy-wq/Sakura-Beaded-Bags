@@ -8,10 +8,10 @@ Sales are successful payment records, not submitted order totals. Product and ma
 ## Files
 - `admin/inventory.php` — inventory summary, material table, history, low-stock alerts, Stock-In and stock-correction forms.
 - `admin/orders.php` — FIFO order cards and list, New Order with a bill of materials, nested inventory-material selection, and order detail actions.
-- `admin/reports.php` — reference-style revenue/expense/profit summary, monthly comparisons, expense analysis, date range, CSV and PDF export.
+- `admin/reports.php` — revenue/expense/profit summary, monthly comparisons, expense analysis, date range, CSV/PDF export, and a weekly/monthly/yearly payment-based Sales Ledger.
 - `assets/css/inventory.css` / `assets/js/inventory-live.js` — inventory UI and MySQL operations.
 - `assets/css/orders.css` / `assets/js/orders-live.js` — order queue, BOM and MySQL workflows.
-- `assets/css/reports.css` / `assets/js/reports-live.js` — payment-based financial reports.
+- `assets/css/reports.css` / `assets/js/reports-live.js` — payment-based financial reports and Sales Ledger, populated from the reports API.
 - `admin/api/products.php` — product reads/writes and soft removal.
 - `admin/api/inventory.php` — material reads/writes and soft removal.
 - This handoff document.

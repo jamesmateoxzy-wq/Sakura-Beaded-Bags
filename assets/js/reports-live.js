@@ -29,6 +29,7 @@
   let payments = [];
   let expenses = [];
   let loaded = false;
+  let ledgerRange = 'weekly';
 
   function summary() {
     const month = $('repPeriod').value || 'all';
@@ -58,6 +59,76 @@
       '<option value="' + escapeHtml(month) + '">' + escapeHtml(shortMonth(month)) + '</option>'
     ).join('');
     $('repPeriod').value = months[0] || 'all';
+  }
+
+  function ledgerDateLabel(iso) {
+    return new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', {
+      month: 'short', day: 'numeric', year: 'numeric'
+    });
+  }
+
+  function ledgerPeriodFor(iso, range) {
+    const date = new Date(iso + 'T00:00:00Z');
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    if (range === 'yearly') return {key:String(year), label:String(year)};
+    if (range === 'monthly') return {
+      key:year + '-' + month,
+      label:date.toLocaleDateString('en-PH', {month:'long', year:'numeric', timeZone:'UTC'})
+    };
+    const monday = new Date(date);
+    monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+    const sunday = new Date(monday);
+    sunday.setUTCDate(sunday.getUTCDate() + 6);
+    const start = monday.toISOString().slice(0, 10);
+    const end = sunday.toISOString().slice(0, 10);
+    return {key:start, label:ledgerDateLabel(start) + ' – ' + ledgerDateLabel(end)};
+  }
+
+  function renderLedger() {
+    if (!loaded) return;
+    const available = new Map();
+    payments.forEach(payment => {
+      const period = ledgerPeriodFor(payment.date, ledgerRange);
+      available.set(period.key, period);
+    });
+    const periods = [...available.values()].sort((a, b) => b.key.localeCompare(a.key));
+    const select = $('ledgerPeriod');
+    const previous = select.value;
+    select.innerHTML = periods.map(period =>
+      '<option value="' + escapeHtml(period.key) + '">' + escapeHtml(period.label) + '</option>'
+    ).join('');
+    select.disabled = periods.length === 0;
+    if (periods.some(period => period.key === previous)) select.value = previous;
+    else if (periods.length) select.value = periods[0].key;
+
+    const period = periods.find(item => item.key === select.value);
+    const rows = period ? payments.filter(payment =>
+      ledgerPeriodFor(payment.date, ledgerRange).key === period.key
+    ).sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id) : [];
+    let balance = 0;
+    let total = 0;
+    $('ledgerRows').innerHTML = rows.map(payment => {
+      const amount = cents(payment.amount);
+      total += amount;
+      balance += amount;
+      return '<tr><td>' + escapeHtml(ledgerDateLabel(payment.date)) + '</td><td>PAY-' +
+        escapeHtml(String(payment.id).padStart(5, '0')) + '</td><td>Sales income</td><td>Payment for ' +
+        escapeHtml(payment.orderId) + '</td><td>—</td><td class="rep-ledger-credit">' +
+        escapeHtml(formatMoney(amount / 100)) + '</td><td>' + escapeHtml(formatMoney(balance / 100)) + '</td></tr>';
+    }).join('');
+
+    const label = ledgerRange.charAt(0).toUpperCase() + ledgerRange.slice(1);
+    $('ledgerTitle').textContent = label + ' Sales Ledger';
+    $('ledgerTableTitle').textContent = label + ' transactions';
+    $('ledgerSubtitle').textContent = period ? period.label + ' · successful payments received' :
+      'No successful payment periods are available.';
+    $('ledgerSales').textContent = formatMoney(total / 100);
+    $('ledgerCount').textContent = rows.length.toLocaleString('en-PH');
+    $('ledgerPeriodTotal').textContent = formatMoney(total / 100);
+    $('ledgerEmpty').hidden = rows.length !== 0;
+    $('ledgerContent').hidden = false;
+    $('ledgerStatus').hidden = true;
   }
 
   function expenseCategories(data) {
@@ -230,9 +301,23 @@
   $('repGranularity').addEventListener('change', render);
   $('repExport').addEventListener('click', exportCsv);
   $('repPrint').addEventListener('click', () => { if (loaded) window.print(); });
+  document.querySelectorAll('[data-ledger-range]').forEach(button => {
+    button.addEventListener('click', () => {
+      ledgerRange = ['weekly', 'monthly', 'yearly'].includes(button.dataset.ledgerRange)
+        ? button.dataset.ledgerRange : 'weekly';
+      document.querySelectorAll('[data-ledger-range]').forEach(tab =>
+        tab.setAttribute('aria-pressed', String(tab === button))
+      );
+      renderLedger();
+    });
+  });
+  $('ledgerPeriod').addEventListener('change', renderLedger);
+  $('ledgerPrint').addEventListener('click', () => { if (loaded) window.print(); });
   $('repExport').disabled = true;
   $('repPrint').disabled = true;
+  $('ledgerPrint').disabled = true;
   $('repPrepared').textContent = 'Loading financial data from MySQL…';
+  $('ledgerStatus').textContent = 'Loading sales ledger…';
   fetch('api/reports.php', {credentials: 'same-origin', cache: 'no-store'})
     .then(async response => {
       const data = await response.json();
@@ -249,9 +334,12 @@
       $('repExport').disabled = false;
       $('repPrint').disabled = false;
       render();
+      $('ledgerPrint').disabled = false;
+      renderLedger();
     })
     .catch(error => {
       $('repPrepared').textContent = 'Could not load reports: ' + error.message;
+      $('ledgerStatus').textContent = 'Could not load sales ledger: ' + error.message;
       if (window.Sakura && typeof Sakura.toast === 'function') Sakura.toast('Could not load Financial Reports from MySQL.');
       console.error('SBB Financial Reports:', error);
     });

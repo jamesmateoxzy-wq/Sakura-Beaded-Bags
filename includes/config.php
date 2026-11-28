@@ -12,7 +12,12 @@
 const GOOGLE_CLIENT_ID = '571875657015-fa3v0aebni20gk051nc0smn48l4rvpri.apps.googleusercontent.com';
 
 const ALLOWED_ADMIN_EMAILS = [
+    'jamesmateoxzy@gmail.com',
+    'jsyfalo@gmail.com',
+    'maikatribo04@gmail.com',
     'elleragos@gmail.com',
+    'nestor.dizonn@gmail.com',
+    'peragrinojr_amador@tup.edu.ph',
     // 'groupmate@gmail.com',
 ];
 
